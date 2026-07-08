@@ -1,7 +1,31 @@
 import { NextResponse } from "next/server";
+import { MercadoPagoConfig, Payment } from "mercadopago";
 import { prisma } from "../../../../lib/prisma";
 import { getCurrentUser } from "../../../../lib/auth";
 import { getPlanBySlug } from "../../../../lib/mercadopago";
+
+function cleanObject(obj) {
+  Object.keys(obj).forEach((key) => {
+    const value = obj[key];
+    if (value === undefined || value === null || value === "") {
+      delete obj[key];
+    } else if (typeof value === "object" && !Array.isArray(value)) {
+      cleanObject(value);
+      if (Object.keys(value).length === 0) delete obj[key];
+    }
+  });
+  return obj;
+}
+
+function getPaymentErrorMessage(error) {
+  const apiMessage =
+    error?.message ||
+    error?.cause?.[0]?.description ||
+    error?.error ||
+    error?.response?.message;
+
+  return apiMessage || "Erro ao processar pagamento no cartão.";
+}
 
 export async function POST(req) {
   try {
@@ -65,7 +89,7 @@ export async function POST(req) {
     const plan = getPlanBySlug(planSlug);
     const payerFromBrick = body.payer || {};
 
-    const mercadoPagoBody = {
+    const mercadoPagoBody = cleanObject({
       transaction_amount: Number(plan.price),
       token,
       description: `Eterniza - Plano ${plan.name}`,
@@ -73,43 +97,41 @@ export async function POST(req) {
       payment_method_id: paymentMethodId,
       issuer_id: body.issuer_id ? String(body.issuer_id) : undefined,
       external_reference: tribute.id,
+      capture: true,
+      binary_mode: false,
       payer: {
         email: payerFromBrick.email || user.email,
         identification: payerFromBrick.identification,
       },
-    };
-
-    Object.keys(mercadoPagoBody).forEach((key) => {
-      if (mercadoPagoBody[key] === undefined || mercadoPagoBody[key] === null) {
-        delete mercadoPagoBody[key];
-      }
     });
-        console.log("========== MERCADO PAGO BODY ==========");
-        console.log(JSON.stringify(mercadoPagoBody, null, 2));
-        console.log("=======================================");
-        console.log("MP TOKEN PREFIX:", process.env.MP_ACCESS_TOKEN?.substring(0, 8));
-console.log("MP BODY:", JSON.stringify(mercadoPagoBody, null, 2));
-    const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-        "X-Idempotency-Key": crypto.randomUUID(),
+
+    const client = new MercadoPagoConfig({
+      accessToken,
+      options: {
+        timeout: 10000,
       },
-      body: JSON.stringify(mercadoPagoBody),
     });
 
-    const mpPayment = await mpRes.json();
+    const paymentClient = new Payment(client);
 
-    if (!mpRes.ok) {
-      console.error("Erro Mercado Pago cartão:", mpPayment);
+    let mpPayment;
+
+    try {
+      mpPayment = await paymentClient.create({
+        body: mercadoPagoBody,
+        requestOptions: {
+          idempotencyKey: crypto.randomUUID(),
+        },
+      });
+    } catch (mpError) {
+      console.error("Erro Mercado Pago SDK cartão:", JSON.stringify(mpError, null, 2));
       return NextResponse.json(
         {
           ok: false,
-          message: mpPayment?.message || "Erro ao processar pagamento no cartão.",
-          mercadoPago: mpPayment,
+          message: getPaymentErrorMessage(mpError),
+          mercadoPago: mpError,
         },
-        { status: mpRes.status }
+        { status: mpError?.status || 400 }
       );
     }
 
