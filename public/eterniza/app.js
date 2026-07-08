@@ -1038,9 +1038,9 @@ function goLoginEnter(e){ if(e) e.preventDefault(); navigateTop('/login'); retur
 
 /* ===== Eterniza V56: Checkout PIX direto na prévia ===== */
 const publishPaymentPlans = [
-  {slug:'essencial', name:'Essencial', price:'R$ 19,90', desc:'Para uma homenagem simples e emocionante.'},
-  {slug:'premium', name:'Premium', price:'R$ 39,90', desc:'O mais escolhido. História completa com QR Code.'},
-  {slug:'eterno', name:'Eterno', price:'R$ 69,90', desc:'Experiência completa para eternizar para sempre.'}
+  {slug:'essencial', name:'Essencial', price:'R$ 19,90', amount:19.90, desc:'Para uma homenagem simples e emocionante.'},
+  {slug:'premium', name:'Premium', price:'R$ 39,90', amount:39.90, desc:'O mais escolhido. História completa com QR Code.'},
+  {slug:'eterno', name:'Eterno', price:'R$ 69,90', amount:69.90, desc:'Experiência completa para eternizar para sempre.'}
 ];
 
 let publishPollTimer = null;
@@ -1070,6 +1070,14 @@ function checkoutStyle(){
       .eterniza-loading-orb{width:74px;height:74px;border-radius:50%;margin:4px auto 18px;border:4px solid rgba(246,207,114,.18);border-top-color:#f6cf72;border-right-color:#f6cf72;animation:eternizaSpin 1s linear infinite;box-shadow:0 0 40px rgba(246,207,114,.18)}
       .eterniza-success-mark{width:82px;height:82px;border-radius:50%;margin:0 auto 16px;background:linear-gradient(135deg,#42d47d,#b9ffcf);color:#07120b;display:flex;align-items:center;justify-content:center;font-size:44px;font-weight:1000;box-shadow:0 0 42px rgba(66,212,125,.32);animation:eternizaPop .55s ease both}
       .eterniza-success-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+      .eterniza-method-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:24px 0}
+      .eterniza-method-card{border:1px solid rgba(239,189,82,.24);background:rgba(0,0,0,.20);border-radius:20px;padding:20px;text-align:left;color:#fff;cursor:pointer}
+      .eterniza-method-card:hover{border-color:rgba(239,189,82,.62)}
+      .eterniza-method-card strong{display:block;font-size:22px;margin-bottom:8px;color:#fff8ea}
+      .eterniza-method-card span{display:block;color:#ead9b7;line-height:1.35}
+      .eterniza-card-box{max-width:680px;margin:0 auto}
+      #eternizaCardBrick{margin-top:18px;background:#fff;border-radius:18px;padding:12px;color:#111}
+      .eterniza-back-row{display:flex;justify-content:flex-start;margin-bottom:16px}
       @keyframes eternizaSpin{to{transform:rotate(360deg)}}
       @keyframes eternizaPop{0%{transform:scale(.65);opacity:0}70%{transform:scale(1.08);opacity:1}100%{transform:scale(1)}}
       @media(max-width:850px){.eterniza-plan-grid{grid-template-columns:1fr}.eterniza-pay-modal{padding:24px}.eterniza-pay-modal h2{font-size:34px}}
@@ -1120,7 +1128,7 @@ function openPublishCheckout(){
   `);
 
   document.querySelectorAll('[data-publish-plan]').forEach(btn => {
-    btn.onclick = () => createPreviewPix(btn.dataset.publishPlan);
+    btn.onclick = () => choosePaymentMethod(btn.dataset.publishPlan);
   });
 }
 
@@ -1145,6 +1153,192 @@ async function ensureCurrentTributeSaved(){
   state.publicUrl = data.tribute.public_url || state.publicUrl;
   localStorage.setItem('giftBuilderState', JSON.stringify(state));
   return data.tribute;
+}
+
+
+function choosePaymentMethod(planSlug){
+  const plan = publishPaymentPlans.find(p => p.slug === planSlug) || publishPaymentPlans.find(p => p.slug === 'premium') || publishPaymentPlans[0];
+  showPublishCheckoutStep(`
+    <h2>💳 Forma de pagamento</h2>
+    <p>Plano escolhido: <b>${esc(plan.name)}</b> • <b>${esc(plan.price)}</b></p>
+    <div class="eterniza-method-grid">
+      <button class="eterniza-method-card" type="button" id="payWithPix">
+        <strong>⚡ PIX</strong>
+        <span>Pagamento instantâneo via QR Code ou copia e cola.</span>
+      </button>
+      <button class="eterniza-method-card" type="button" id="payWithCard">
+        <strong>💳 Cartão de crédito</strong>
+        <span>Visa, Mastercard e cartões aceitos pelo Mercado Pago.</span>
+      </button>
+    </div>
+    <button class="eterniza-pay-secondary" type="button" id="backToPlans">Voltar aos planos</button>
+  `);
+  const pix = document.getElementById('payWithPix');
+  if(pix) pix.onclick = () => createPreviewPix(plan.slug);
+  const card = document.getElementById('payWithCard');
+  if(card) card.onclick = () => openCardPayment(plan.slug);
+  const back = document.getElementById('backToPlans');
+  if(back) back.onclick = openPublishCheckout;
+}
+
+function loadMercadoPagoSdk(){
+  return new Promise((resolve, reject)=>{
+    if(window.MercadoPago) return resolve();
+    const existing = document.querySelector('script[data-mp-sdk="true"]');
+    if(existing){ existing.addEventListener('load', resolve); existing.addEventListener('error', reject); return; }
+    const script = document.createElement('script');
+    script.src = 'https://sdk.mercadopago.com/js/v2';
+    script.async = true;
+    script.dataset.mpSdk = 'true';
+    script.onload = resolve;
+    script.onerror = () => reject(new Error('Não foi possível carregar o Mercado Pago.'));
+    document.head.appendChild(script);
+  });
+}
+
+async function getMercadoPagoPublicKey(){
+  const res = await fetch('/api/payments/config');
+  const data = await res.json();
+  if(!res.ok || !data.ok || !data.publicKey){
+    throw new Error('MP_PUBLIC_KEY não configurada na Vercel.');
+  }
+  return data.publicKey;
+}
+
+async function openCardPayment(planSlug){
+  try{
+    const plan = publishPaymentPlans.find(p => p.slug === planSlug) || publishPaymentPlans.find(p => p.slug === 'premium') || publishPaymentPlans[0];
+    showPublishCheckoutStep(`
+      <div class="eterniza-card-box">
+        <div class="eterniza-back-row"><button class="eterniza-pay-secondary" type="button" id="backToMethods">← Voltar</button></div>
+        <h2>💳 Pagar com cartão</h2>
+        <p>Plano ${esc(plan.name)} • ${esc(plan.price)}. Preencha os dados pelo formulário seguro do Mercado Pago.</p>
+        <div id="eternizaCardBrick"></div>
+        <div class="eterniza-pay-status" id="cardPaymentStatus" style="display:none"><span class="eterniza-spinner"></span><span>Processando pagamento...</span></div>
+      </div>
+    `);
+
+    const back = document.getElementById('backToMethods');
+    if(back) back.onclick = () => choosePaymentMethod(plan.slug);
+
+    const tribute = await ensureCurrentTributeSaved();
+    await loadMercadoPagoSdk();
+    const publicKey = await getMercadoPagoPublicKey();
+    const mp = new MercadoPago(publicKey, { locale: 'pt-BR' });
+    const bricksBuilder = mp.bricks();
+
+    await bricksBuilder.create('cardPayment', 'eternizaCardBrick', {
+      initialization: {
+        amount: Number(plan.amount || 39.9),
+        payer: {
+          email: state.userEmail || ''
+        }
+      },
+      customization: {
+        visual: {
+          style: {
+            theme: 'default'
+          }
+        },
+        paymentMethods: {
+          types: {
+            excluded: ['debit_card', 'prepaid_card']
+          }
+        }
+      },
+      callbacks: {
+        onReady: () => {},
+        onSubmit: (cardFormData) => {
+          const status = document.getElementById('cardPaymentStatus');
+          if(status) status.style.display = 'flex';
+          return new Promise(async (resolve, reject) => {
+            try{
+              const res = await fetch('/api/payments/card', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({
+                  ...cardFormData,
+                  tributeId: tribute.id,
+                  plan: plan.slug
+                })
+              });
+              const data = await res.json();
+              if(!res.ok || !data.ok){
+                throw new Error(data.message || 'Pagamento recusado. Confira os dados do cartão.');
+              }
+              const mpStatus = String(data.payment?.status || '').toLowerCase();
+              if(mpStatus === 'approved'){
+                showCardSuccess(tribute.id, tribute.slug || state.slug);
+              }else{
+                showPublishCheckoutStep(`
+                  <div class="eterniza-pix-box">
+                    <h2>Pagamento em análise</h2>
+                    <p>Status: ${esc(data.payment?.status || 'pending')}. Assim que for aprovado, sua história será publicada automaticamente.</p>
+                    <div class="eterniza-pay-status"><span class="eterniza-spinner"></span><span>Aguardando confirmação...</span></div>
+                  </div>
+                `);
+                startPublishStatusPolling(tribute.id, tribute.slug || state.slug);
+              }
+              resolve();
+            }catch(error){
+              const status = document.getElementById('cardPaymentStatus');
+              if(status) status.style.display = 'none';
+              showPublishCheckoutStep(`
+                <div class="eterniza-pix-box">
+                  <h2>Pagamento não aprovado</h2>
+                  <p>${esc(error.message || 'Tente novamente usando outro cartão.')}</p>
+                  <button class="eterniza-pay-btn" type="button" id="tryCardAgain">Tentar cartão novamente</button>
+                  <button class="eterniza-pay-secondary" type="button" id="tryPixInstead" style="margin-top:10px;width:100%">Pagar com PIX</button>
+                </div>
+              `);
+              const again = document.getElementById('tryCardAgain');
+              if(again) again.onclick = () => openCardPayment(plan.slug);
+              const pix = document.getElementById('tryPixInstead');
+              if(pix) pix.onclick = () => createPreviewPix(plan.slug);
+              reject(error);
+            }
+          });
+        },
+        onError: (error) => {
+          console.error('Erro no Card Payment Brick:', error);
+        }
+      }
+    });
+  }catch(error){
+    showPublishCheckoutStep(`
+      <div class="eterniza-pix-box">
+        <h2>Não foi possível abrir o cartão</h2>
+        <p>${esc(error.message || 'Tente novamente em instantes.')}</p>
+        <button class="eterniza-pay-btn" type="button" id="backToCheckoutPlans">Voltar</button>
+      </div>
+    `);
+    const back = document.getElementById('backToCheckoutPlans');
+    if(back) back.onclick = openPublishCheckout;
+  }
+}
+
+function showCardSuccess(tributeId, fallbackSlug){
+  const url = fallbackSlug ? `/presente/${fallbackSlug}` : '/dashboard';
+  showPublishCheckoutStep(`
+    <div class="eterniza-pix-box">
+      <div class="eterniza-success-mark">✓</div>
+      <h2>Pagamento aprovado!</h2>
+      <p>Sua história foi publicada com sucesso.</p>
+      <div class="eterniza-success-actions">
+        <button class="eterniza-pay-btn" type="button" id="openCardPublishedStory">Abrir minha história</button>
+        <button class="eterniza-pay-secondary" type="button" id="copyCardPublishedStory">Copiar link</button>
+      </div>
+    </div>
+  `);
+  const open = document.getElementById('openCardPublishedStory');
+  if(open) open.onclick = () => navigateTop(url, false);
+  const copy = document.getElementById('copyCardPublishedStory');
+  if(copy) copy.onclick = () => {
+    const fullUrl = location.origin + url;
+    navigator.clipboard?.writeText(fullUrl);
+    copy.textContent = 'Link copiado!';
+    setTimeout(()=>copy.textContent='Copiar link',1800);
+  };
 }
 
 async function createPreviewPix(planSlug){
