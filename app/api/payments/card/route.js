@@ -84,7 +84,9 @@ export async function POST(req) {
         delete mercadoPagoBody[key];
       }
     });
-
+        console.log("========== MERCADO PAGO BODY ==========");
+        console.log(JSON.stringify(mercadoPagoBody, null, 2));
+        console.log("=======================================");
     const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
       method: "POST",
       headers: {
