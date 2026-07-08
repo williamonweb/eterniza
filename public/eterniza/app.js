@@ -1197,11 +1197,12 @@ function loadMercadoPagoSdk(){
 }
 
 async function getMercadoPagoPublicKey(){
-  const res = await fetch('/api/payments/config');
+  const res = await fetch(`/api/payments/config?t=${Date.now()}`, { cache: 'no-store' });
   const data = await res.json();
   if(!res.ok || !data.ok || !data.publicKey){
     throw new Error('MP_PUBLIC_KEY não configurada na Vercel.');
   }
+  console.log('Mercado Pago Public Key prefix:', String(data.publicKey || '').slice(0, 12));
   return data.publicKey;
 }
 
@@ -1227,7 +1228,12 @@ async function openCardPayment(planSlug){
     const mp = new MercadoPago(publicKey, { locale: 'pt-BR' });
     const bricksBuilder = mp.bricks();
 
-    await bricksBuilder.create('cardPayment', 'eternizaCardBrick', {
+    if(window.eternizaCardBrickController && typeof window.eternizaCardBrickController.unmount === 'function'){
+      try{ await window.eternizaCardBrickController.unmount(); }catch(e){ console.warn('Não foi possível desmontar o Brick anterior:', e); }
+      window.eternizaCardBrickController = null;
+    }
+
+    window.eternizaCardBrickController = await bricksBuilder.create('cardPayment', 'eternizaCardBrick', {
       initialization: {
         amount: Number(plan.amount || 39.9),
         payer: {
@@ -1248,19 +1254,26 @@ async function openCardPayment(planSlug){
       },
       callbacks: {
         onReady: () => {},
-        onSubmit: async (cardFormData) => {
-          console.log('Mercado Pago cardFormData:', cardFormData);
+        onSubmit: async (cardFormData, additionalData) => {
+          const formData = cardFormData && cardFormData.formData ? cardFormData.formData : cardFormData;
+          console.log('Mercado Pago cardFormData bruto:', cardFormData);
+          console.log('Mercado Pago formData enviado:', formData);
+          console.log('Mercado Pago additionalData:', additionalData);
 
           return new Promise(async (resolve, reject) => {
             try {
               const status = document.getElementById('cardPaymentStatus');
               if(status) status.style.display = 'flex';
 
+              if(!formData || !formData.token || !formData.payment_method_id){
+                throw new Error('O Mercado Pago não gerou o token do cartão. Confirme se MP_PUBLIC_KEY e MP_ACCESS_TOKEN são do mesmo ambiente TEST ou PRODUÇÃO, faça redeploy na Vercel e tente novamente.');
+              }
+
               const res = await fetch('/api/payments/card', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  ...cardFormData,
+                  ...formData,
                   tributeId: tribute.id,
                   plan: plan.slug
                 })
