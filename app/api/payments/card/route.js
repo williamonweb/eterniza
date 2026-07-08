@@ -87,6 +87,8 @@ export async function POST(req) {
         console.log("========== MERCADO PAGO BODY ==========");
         console.log(JSON.stringify(mercadoPagoBody, null, 2));
         console.log("=======================================");
+        console.log("MP TOKEN PREFIX:", process.env.MP_ACCESS_TOKEN?.substring(0, 8));
+console.log("MP BODY:", JSON.stringify(mercadoPagoBody, null, 2));
     const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
       method: "POST",
       headers: {
