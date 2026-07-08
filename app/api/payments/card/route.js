@@ -25,7 +25,14 @@ export async function POST(req) {
       );
     }
 
-    if (!body.token || !body.payment_method_id) {
+    const token = body.token || body.cardToken;
+    const paymentMethodId =
+      body.payment_method_id ||
+      body.paymentMethodId ||
+      body.payment_method?.id ||
+      body.paymentMethod?.id;
+
+    if (!token || !paymentMethodId) {
       return NextResponse.json(
         { ok: false, message: "Dados do cartão incompletos." },
         { status: 400 }
@@ -60,10 +67,10 @@ export async function POST(req) {
 
     const mercadoPagoBody = {
       transaction_amount: Number(plan.price),
-      token: body.token,
+      token,
       description: `Eterniza - Plano ${plan.name}`,
       installments: Number(body.installments || 1),
-      payment_method_id: body.payment_method_id,
+      payment_method_id: paymentMethodId,
       issuer_id: body.issuer_id ? String(body.issuer_id) : undefined,
       external_reference: tribute.id,
       payer: {
