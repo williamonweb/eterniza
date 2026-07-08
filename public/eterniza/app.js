@@ -1248,25 +1248,32 @@ async function openCardPayment(planSlug){
       },
       callbacks: {
         onReady: () => {},
-        onSubmit: (cardFormData) => {
-          const status = document.getElementById('cardPaymentStatus');
-          if(status) status.style.display = 'flex';
+        onSubmit: async (cardFormData) => {
+          console.log('Mercado Pago cardFormData:', cardFormData);
+
           return new Promise(async (resolve, reject) => {
-            try{
+            try {
+              const status = document.getElementById('cardPaymentStatus');
+              if(status) status.style.display = 'flex';
+
               const res = await fetch('/api/payments/card', {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   ...cardFormData,
                   tributeId: tribute.id,
                   plan: plan.slug
                 })
               });
+
               const data = await res.json();
+
               if(!res.ok || !data.ok){
                 throw new Error(data.message || 'Pagamento recusado. Confira os dados do cartão.');
               }
+
               const mpStatus = String(data.payment?.status || '').toLowerCase();
+
               if(mpStatus === 'approved'){
                 showCardSuccess(tribute.id, tribute.slug || state.slug);
               }else{
@@ -1279,10 +1286,12 @@ async function openCardPayment(planSlug){
                 `);
                 startPublishStatusPolling(tribute.id, tribute.slug || state.slug);
               }
+
               resolve();
-            }catch(error){
+            } catch(error) {
               const status = document.getElementById('cardPaymentStatus');
               if(status) status.style.display = 'none';
+
               showPublishCheckoutStep(`
                 <div class="eterniza-pix-box">
                   <h2>Pagamento não aprovado</h2>
@@ -1291,10 +1300,13 @@ async function openCardPayment(planSlug){
                   <button class="eterniza-pay-secondary" type="button" id="tryPixInstead" style="margin-top:10px;width:100%">Pagar com PIX</button>
                 </div>
               `);
+
               const again = document.getElementById('tryCardAgain');
               if(again) again.onclick = () => openCardPayment(plan.slug);
+
               const pix = document.getElementById('tryPixInstead');
               if(pix) pix.onclick = () => createPreviewPix(plan.slug);
+
               reject(error);
             }
           });
