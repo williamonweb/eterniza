@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  CLIENT
+}
+
+enum TributeStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  phone     String?
+  role      UserRole @default(CLIENT)
+
+  tributes  Tribute[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Tribute {
+  id             String        @id @default(cuid())
+  slug           String        @unique
+  title          String
+  category       String?
+  message        String?       @db.Text
+  music          Json?
+  content        Json?
+  status         TributeStatus @default(DRAFT)
+
+  receiverName   String?
+  senderName     String?
+  specialDate    DateTime?
+  planId         String?
+  planName       String?
+  planPriceCents Int           @default(0)
+  publicUrl      String?
+  expiresAt      DateTime?
+  publishedAt    DateTime?
+
+  userId         String
+  user           User          @relation(fields: [userId], references: [id])
+
+  photos         Photo[]
+  payments       Payment[]
+  views          View[]
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model Photo {
+  id        String  @id @default(cuid())
+  url       String
+  caption   String?
+  order     Int
+
+  tributeId String
+  tribute   Tribute @relation(fields: [tributeId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id             String   @id @default(cuid())
+  status         String
+  amount         Float
+  mercadoPagoId  String?
+
+  tributeId      String
+  tribute        Tribute @relation(fields: [tributeId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime @default(now())
+}
+
+model View {
+  id        String   @id @default(cuid())
+  ip        String?
+  city      String?
+  country   String?
+
+  tributeId String
+  tribute   Tribute  @relation(fields: [tributeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
