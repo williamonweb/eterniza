@@ -81,12 +81,50 @@ function previewSelectedTrack(btn){
   previewAudio.play().then(()=>{btn.textContent='⏸ Pausar prévia'; btn.classList.add('playing');}).catch(()=>showModal('Áudio bloqueado','Clique novamente no botão de prévia para liberar o som.'));
 }
 
-const plans = [
+let plans = [
   {id:'basico', name:'Básico', price:'R$ 19,90', cents:1990, photos:2, duration:'1 mês', features:['2 fotos','Música por YouTube','Carta personalizada']},
   {id:'top', name:'Top', price:'R$ 28,90', cents:2890, photos:5, duration:'5 meses', features:['5 fotos','Música de fundo','Carta personalizada','Contador para casais']},
   {id:'premium', name:'Premium', price:'R$ 39,90', cents:3990, photos:10, duration:'vitalício', features:['10 fotos','Música de fundo','Carta personalizada','Contador para casais','Data especial para casais']}
 ];
-const screens=['landingScreen','loginScreen','dashboardScreen','recipientScreen','planScreen','detailsScreen','previewScreen','adminScreen'];
+
+function formatPlanCurrencyFromCents(cents){
+  return (Number(cents || 0) / 100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+}
+
+function normalizeRemotePlan(plan){
+  return {
+    id: plan.slug || plan.id,
+    slug: plan.slug || plan.id,
+    name: plan.name,
+    price: formatPlanCurrencyFromCents(plan.priceCents || plan.cents),
+    cents: Number(plan.priceCents || plan.cents || 0),
+    photos: Number(plan.photos || 10),
+    duration: plan.duration || 'vitalício',
+    features: Array.isArray(plan.features) ? plan.features : [],
+    desc: plan.description || plan.desc || '',
+    promoActive: !!plan.promoActive,
+    promoName: plan.promoName || '',
+    regularPriceCents: plan.regularPriceCents || plan.priceCents || plan.cents
+  };
+}
+
+async function loadDynamicPlans(){
+  try{
+    const res = await fetch('/api/plans', { cache:'no-store' });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok || !data.ok || !Array.isArray(data.plans) || !data.plans.length) return;
+    plans = data.plans.map(normalizeRemotePlan);
+    if(state.plan){
+      const updated = plans.find(p=>p.id === state.plan.id || p.slug === state.plan.slug);
+      if(updated) state.plan = updated;
+    }
+    renderPlans();
+  }catch(error){
+    console.warn('Não foi possível carregar planos dinâmicos.', error);
+  }
+}
+
+const screensconst screens=['landingScreen','loginScreen','dashboardScreen','recipientScreen','planScreen','detailsScreen','previewScreen','adminScreen'];
 const $=id=>document.getElementById(id);
 let state=JSON.parse(localStorage.getItem('giftBuilderState')||'{}');
 let orders=JSON.parse(localStorage.getItem('giftOrders')||'[]');
@@ -149,7 +187,7 @@ function renderRecipients(){
     go('detailsScreen');
   });
 }
-function renderPlans(){$('planGrid').innerHTML=plans.map(p=>`<button class="plan-card" data-plan="${p.id}"><strong>${p.name}</strong><div class="price">${p.price}</div><p>Online: <b>${p.duration}</b></p><ul>${p.features.map(f=>`<li>${f}</li>`).join('')}</ul></button>`).join('');document.querySelectorAll('[data-plan]').forEach(b=>b.onclick=()=>{state.plan=plans.find(p=>p.id===b.dataset.plan);saveState();prepareDetails();go('detailsScreen')})}
+function renderPlans(){$('planGrid').innerHTML=plans.map(p=>`<button class="plan-card" data-plan="${p.id}"><strong>${p.name}</strong>${p.promoActive?`<em class="promo-badge">${esc(p.promoName||'Promoção')}</em>`:''}<div class="price">${p.price}</div>${p.promoActive&&p.regularPriceCents?`<small class="old-price">de ${formatPlanCurrencyFromCents(p.regularPriceCents)}</small>`:''}<p>Online: <b>${p.duration}</b></p><ul>${(p.features||[]).map(f=>`<li>${f}</li>`).join('')}</ul></button>`).join('');document.querySelectorAll('[data-plan]').forEach(b=>b.onclick=()=>{state.plan=plans.find(p=>p.id===b.dataset.plan);saveState();prepareDetails();go('detailsScreen')})}
 function prepareDetails(){
   const r=state.recipient||recipients[0], p=state.plan||plans[0];
   $('selectedThemeBox').innerHTML=`<strong>${r.theme}</strong><br><span>Tema automático para ${r.title}. Você ainda pode escolher as cores da página.</span>`;
@@ -898,6 +936,97 @@ function orderCard(o){
     </div>
   </div>`;
 }
+
+function adminPlanCard(plan){
+  const features = (plan.features || []).join('\n');
+  return `<div class="admin-panel-pro plan-editor-card" data-plan-card="${esc(plan.id||plan.slug)}">
+    <div class="plan-editor-head">
+      <div>
+        <small>${esc(plan.slug || plan.id)}</small>
+        <h3>${esc(plan.name)}</h3>
+      </div>
+      ${plan.promoActive?`<span class="status promo-status">${esc(plan.promoName||'Promoção ativa')}</span>`:'<span class="status">Preço padrão</span>'}
+    </div>
+    <div class="admin-grid-2 compact">
+      <label>Nome<input class="admin-search" data-plan-field="name" value="${esc(plan.name)}"></label>
+      <label>Preço padrão<input class="admin-search" data-plan-field="price" value="${(Number(plan.regularPriceCents||plan.cents||0)/100).toFixed(2).replace('.',',')}"></label>
+      <label>Fotos<input class="admin-search" data-plan-field="photos" type="number" min="1" value="${Number(plan.photos||10)}"></label>
+      <label>Duração<input class="admin-search" data-plan-field="duration" value="${esc(plan.duration||'vitalício')}"></label>
+    </div>
+    <label>Descrição<input class="admin-search" data-plan-field="description" value="${esc(plan.desc||plan.description||'')}"></label>
+    <label>Recursos<textarea class="admin-search admin-textarea" data-plan-field="features">${esc(features)}</textarea></label>
+    <div class="promo-editor">
+      <label class="promo-toggle"><input type="checkbox" data-plan-field="promoActive" ${plan.promoActive?'checked':''}> Ativar promoção</label>
+      <div class="admin-grid-2 compact">
+        <label>Campanha<input class="admin-search" data-plan-field="promoName" placeholder="Black Friday" value="${esc(plan.promoName||'')}"></label>
+        <label>Preço promocional<input class="admin-search" data-plan-field="promoPrice" placeholder="29,90" value="${plan.promoPriceCents?(Number(plan.promoPriceCents)/100).toFixed(2).replace('.',','):''}"></label>
+        <label>Início<input class="admin-search" data-plan-field="promoStartsAt" type="date" value="${plan.promoStartsAt||''}"></label>
+        <label>Fim<input class="admin-search" data-plan-field="promoEndsAt" type="date" value="${plan.promoEndsAt||''}"></label>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function loadAdminPlans(){
+  const box=$('adminPlansBox');
+  if(!box) return;
+  box.innerHTML='<div class="admin-panel-pro"><p>Carregando planos...</p></div>';
+  try{
+    const res=await fetch('/api/admin/plans',{cache:'no-store'});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok || !data.ok) throw new Error(data.message || 'Erro ao carregar planos.');
+    box.innerHTML=(data.plans||[]).map(adminPlanCard).join('');
+    $('saveAdminPlansBtn')?.classList.remove('hidden');
+  }catch(error){
+    box.innerHTML=`<div class="admin-panel-pro"><h3>Erro ao carregar planos</h3><p>${esc(error.message||'Tente novamente.')}</p></div>`;
+  }
+}
+
+function collectAdminPlans(){
+  return [...document.querySelectorAll('[data-plan-card]')].map((card,index)=>{
+    const get=(field)=>{
+      const el=card.querySelector(`[data-plan-field="${field}"]`);
+      if(!el) return '';
+      if(el.type==='checkbox') return el.checked;
+      return el.value;
+    };
+    return {
+      slug: card.dataset.planCard,
+      name: get('name'),
+      price: get('price'),
+      description: get('description'),
+      photos: get('photos'),
+      duration: get('duration'),
+      features: get('features'),
+      promoActive: get('promoActive'),
+      promoName: get('promoName'),
+      promoPrice: get('promoPrice'),
+      promoStartsAt: get('promoStartsAt'),
+      promoEndsAt: get('promoEndsAt'),
+      sortOrder: index + 1,
+      isActive: true
+    };
+  });
+}
+
+async function saveAdminPlans(){
+  try{
+    const btn=$('saveAdminPlansBtn');
+    if(btn){btn.disabled=true;btn.textContent='Salvando...';}
+    const res=await fetch('/api/admin/plans',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plans:collectAdminPlans()})});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok || !data.ok) throw new Error(data.message || 'Erro ao salvar planos.');
+    showModal('Planos atualizados','Os valores e promoções foram salvos com sucesso.');
+    await loadDynamicPlans();
+    await loadAdminPlans();
+  }catch(error){
+    showModal('Erro ao salvar planos', error.message || 'Não foi possível salvar as alterações.');
+  }finally{
+    const btn=$('saveAdminPlansBtn');
+    if(btn){btn.disabled=false;btn.textContent='Salvar planos e promoções';}
+  }
+}
+
 function renderAdminSection(section=activeAdminSection){
   activeAdminSection=section;
   document.querySelectorAll('[data-admin-section]').forEach(b=>b.classList.toggle('active',b.dataset.adminSection===section));
@@ -909,7 +1038,7 @@ function renderAdminSection(section=activeAdminSection){
     box.innerHTML=adminHeader('Dashboard','Visão geral da operação, vendas simuladas e próximos passos.',`<button id="adminNewGiftBtn" class="primary-btn">Novo presente</button>`)+adminStatsHtml()+
     `<div class="admin-growth-grid clickable-modules">
       ${[
-        ['clientes','👥 Clientes','Cadastros, WhatsApp e histórico'],['homenagens','🎁 Homenagens','Links, status e publicações'],['biblioteca','🎵 Biblioteca','Trilhas Eterniza e YouTube'],['escritor','🤖 Escritor Eterniza','Cartas por emoção e tamanho'],['cupons','🎟️ Cupons','Datas comemorativas e descontos'],['pagamentos','💳 Pagamentos','Pix, cartão e Asaas'],['analytics','📊 Analytics','Visualizações, QR e dispositivos'],['qrcode','▦ QR Code','PNG, PDF, etiqueta e cartão'],['whatsapp','📱 WhatsApp','Mensagens prontas para clientes'],['configuracoes','⚙️ Configurações','Logo, planos, domínio e APIs']
+        ['clientes','👥 Clientes','Cadastros, WhatsApp e histórico'],['homenagens','🎁 Homenagens','Links, status e publicações'],['biblioteca','🎵 Biblioteca','Trilhas Eterniza e YouTube'],['escritor','🤖 Escritor Eterniza','Cartas por emoção e tamanho'],['cupons','🎟️ Cupons','Datas comemorativas e descontos'],['planos','💰 Planos e Promoções','Preços, campanhas e Black Friday'],['pagamentos','💳 Pagamentos','Pix, cartão e Asaas'],['analytics','📊 Analytics','Visualizações, QR e dispositivos'],['qrcode','▦ QR Code','PNG, PDF, etiqueta e cartão'],['whatsapp','📱 WhatsApp','Mensagens prontas para clientes'],['configuracoes','⚙️ Configurações','Logo, planos, domínio e APIs']
       ].map(x=>`<button class="admin-module admin-module-btn" type="button" data-admin-section="${x[0]}"><strong>${x[1]}</strong><span>${x[2]}</span></button>`).join('')}
     </div>
     <div class="admin-panel-pro"><h3>Últimas homenagens</h3><div class="orders-list">${orders.length?orders.slice(0,3).map(orderCard).join(''):'<p>Nenhum pedido encontrado.</p>'}</div></div>`;
@@ -939,6 +1068,13 @@ function renderAdminSection(section=activeAdminSection){
     box.innerHTML=adminHeader('Cupons','Crie promoções para Dia dos Namorados, Mães, Pais e aniversários.',`<button class="primary-btn" data-admin-modal="Novo cupom|Cupom criado localmente na próxima etapa com banco.">Criar cupom</button>`)+
     `<div class="admin-grid-3">${['AMOR10','MAE15','PREMIUM20'].map((c,i)=>`<div class="admin-template-card"><b>🎟️ ${c}</b><p>${[10,15,20][i]}% de desconto • Ativo</p><button class="ghost-btn small" data-admin-modal="Cupom ${c}|Editar validade, limite e planos participantes.">Editar</button></div>`).join('')}</div>`;
   }
+  if(section==='planos'){
+    box.innerHTML=adminHeader('Planos e Promoções','Altere valores, campanhas e ofertas sazonais como Black Friday, Dia dos Namorados e Natal.',`<button id="saveAdminPlansBtn" class="primary-btn hidden">Salvar planos e promoções</button>`)+
+    `<div class="admin-panel-pro"><h3>Como funciona</h3><p>O preço salvo aqui passa a ser usado no checkout Pix do Asaas. Promoções ativas substituem temporariamente o preço padrão.</p></div>
+    <div id="adminPlansBox" class="admin-grid-3"></div>`;
+    $('saveAdminPlansBtn')?.addEventListener('click', saveAdminPlans);
+    loadAdminPlans();
+  }
   if(section==='pagamentos'){
     box.innerHTML=adminHeader('Pagamentos','Controle Pix, cartão, renovações e integração Asaas.',`<button class="primary-btn" data-admin-modal="Asaas|Configuração do token e webhooks ficará em Configurações.">Configurar Asaas</button>`)+
     `<div class="admin-dashboard"><div class="admin-stat"><strong>${adminMoney(total)}</strong><span>recebido</span></div><div class="admin-stat"><strong>${adminMoney(0)}</strong><span>pendente</span></div><div class="admin-stat"><strong>${published.length}</strong><span>links ativos</span></div></div>
@@ -959,7 +1095,7 @@ function renderAdminSection(section=activeAdminSection){
   }
   if(section==='configuracoes'){
     box.innerHTML=adminHeader('Configurações','Controle marca, planos, preços, domínio e integrações.')+
-    `<div class="admin-grid-2"><div class="admin-panel-pro"><h3>Marca</h3><label>Nome da marca</label><input class="admin-search" value="Eterniza"><label>Slogan</label><input class="admin-search" value="Onde Cada História Vive Para Sempre!"><button class="primary-btn full" data-admin-modal="Configurações salvas|Na próxima etapa salvaremos no banco de dados.">Salvar marca</button></div><div class="admin-panel-pro"><h3>Integrações</h3><div class="settings-line"><span>YouTube API</span><b>Configurada</b></div><div class="settings-line"><span>Asaas</span><b>Pendente</b></div><div class="settings-line"><span>OpenAI/IA</span><b>Pendente</b></div><div class="settings-line"><span>Domínio</span><b>eterniza.com.br</b></div></div></div>`;
+    `<div class="admin-grid-2"><div class="admin-panel-pro"><h3>Marca</h3><label>Nome da marca</label><input class="admin-search" value="Eterniza"><label>Slogan</label><input class="admin-search" value="Onde Cada História Vive Para Sempre!"><button class="primary-btn full" data-admin-modal="Configurações salvas|Na próxima etapa salvaremos no banco de dados.">Salvar marca</button></div><div class="admin-panel-pro"><h3>Integrações</h3><div class="settings-line"><span>YouTube API</span><b>Configurada</b></div><div class="settings-line"><span>Asaas</span><b>Configurado</b></div><div class="settings-line"><span>OpenAI/IA</span><b>Pendente</b></div><div class="settings-line"><span>Domínio</span><b>eterniza.com.br</b></div></div></div>`;
   }
   document.querySelectorAll('[data-admin-section]').forEach(b=>{ if(!b.dataset.bound){ b.dataset.bound='1'; b.onclick=()=>renderAdminSection(b.dataset.adminSection); }});
   document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{navigator.clipboard?.writeText(b.dataset.copy);showModal('Link copiado',b.dataset.copy)});
@@ -1345,6 +1481,29 @@ function startPublishStatusPolling(tributeId, fallbackSlug){
 /* ===== Fim Checkout PIX direto na prévia ===== */
 
 
+
+(function injectAdminPlanStyles(){
+  if(document.getElementById('adminPlanStyles')) return;
+  const style=document.createElement('style');
+  style.id='adminPlanStyles';
+  style.textContent=`
+    .promo-badge{display:inline-flex;margin:8px 0 0;padding:5px 9px;border-radius:999px;background:rgba(239,189,82,.18);color:#f6cf72;font-size:12px;font-style:normal;font-weight:900}
+    .old-price{display:block;color:#cbb98f;text-decoration:line-through;margin-top:-8px;margin-bottom:8px}
+    .hidden{display:none!important}
+    .plan-editor-card{display:grid;gap:12px}
+    .plan-editor-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+    .plan-editor-head small{display:block;color:#f6cf72;text-transform:uppercase;font-weight:900;letter-spacing:.06em}
+    .plan-editor-head h3{margin:3px 0 0}
+    .promo-status{border-color:rgba(239,189,82,.35)!important;color:#f6cf72!important}
+    .admin-grid-2.compact{gap:10px}
+    .admin-grid-2.compact label,.plan-editor-card label{display:grid;gap:6px;color:#ead9b7;font-weight:800}
+    .admin-textarea{min-height:92px;resize:vertical}
+    .promo-editor{border:1px solid rgba(239,189,82,.16);background:rgba(0,0,0,.16);border-radius:16px;padding:12px;display:grid;gap:10px}
+    .promo-toggle{display:flex!important;grid-template-columns:auto 1fr;align-items:center;gap:8px}
+  `;
+  document.head.appendChild(style);
+})();
+
 ['landingCreateBtn','landingCreateTopBtn'].forEach(id=>{const el=$(id); if(el){el.setAttribute('href','/cadastro'); el.setAttribute('target','_top'); el.addEventListener('click', goLoginCreate);}});
 ['landingLoginBtn','landingLoginTopBtn'].forEach(id=>{const el=$(id); if(el){el.setAttribute('href','/login'); el.setAttribute('target','_top'); el.addEventListener('click', goLoginEnter);}});
 if($('demoOpenBtn')) { $('demoOpenBtn').setAttribute('href','/presente/demo-maria-e-jose'); $('demoOpenBtn').setAttribute('target','_top'); $('demoOpenBtn').addEventListener('click', (e)=>{e.preventDefault(); ensureDemoOrder(); navigateTop('/presente/demo-maria-e-jose'); return false;}); }
@@ -1352,4 +1511,4 @@ $('showLoginBtn').onclick=()=>setAuthMode('login');
 $('showCreateBtn').onclick=()=>setAuthMode('create');
 $('loginBtn').onclick=()=>navigateTop('/login',true);
 $('createAccountBtn').onclick=()=>navigateTop('/cadastro',true);if($('logoutBtn')) $('logoutBtn').onclick=adminLogout;$('previewBtn').onclick=()=>{document.body.dataset.publicGift='false';buildPreview();};$('editBtn').onclick=()=>go('detailsScreen');$('publishBtn').textContent='❤️ Publicar minha história';$('publishBtn').onclick=openPublishCheckout;if($('newGiftBtn')) $('newGiftBtn').onclick=()=>go('recipientScreen'); if($('dashboardNewGiftBtn')) $('dashboardNewGiftBtn').onclick=()=>go('recipientScreen');$('backDetailsBtn').onclick=()=>go('recipientScreen');$('aiTextBtn').onclick=aiSuggestion;$('musicMode').onchange=()=>{state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();saveState();toggleYoutubeField();};document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{activeFilter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('active-filter'));b.classList.add('active-filter');renderOrders()});
-setupAuthAndYoutubeHelpers();renderRecipients();renderPlans();if(state.userEmail)$('email').value=state.userEmail;window.addEventListener('hashchange',openRoute);if(!openRoute())go('landingScreen');
+setupAuthAndYoutubeHelpers();renderRecipients();renderPlans();loadDynamicPlans();if(state.userEmail)$('email').value=state.userEmail;window.addEventListener('hashchange',openRoute);if(!openRoute())go('landingScreen');

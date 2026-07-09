@@ -15,6 +15,7 @@ export async function POST(req) {
     }
 
     const body = await req.json();
+
     const tributeId = String(body.tributeId || "");
     const planSlug = String(body.plan || "premium");
 
@@ -39,7 +40,8 @@ export async function POST(req) {
       );
     }
 
-    const plan = getPlanBySlug(planSlug);
+    const plan = await getPlanBySlug(planSlug);
+
     const asaasResult = await createAsaasPixPayment({
       tributeId: tribute.id,
       payerEmail: user.email,
@@ -47,15 +49,23 @@ export async function POST(req) {
       plan,
     });
 
-    const asaasPayment = asaasResult.payment;
-    const pixQrCode = asaasResult.qrCode;
-
     const payment = await prisma.payment.create({
       data: {
         tributeId: tribute.id,
         amount: plan.price,
         status: "PENDING",
-        mercadoPagoId: String(asaasPayment.id),
+        mercadoPagoId: String(asaasResult.payment.id),
+      },
+    });
+
+    await prisma.tribute.update({
+      where: {
+        id: tribute.id,
+      },
+      data: {
+        planId: plan.slug,
+        planName: plan.name,
+        planPriceCents: plan.priceCents,
       },
     });
 
@@ -64,23 +74,32 @@ export async function POST(req) {
       provider: "asaas",
       payment: {
         id: payment.id,
-        asaasId: asaasPayment.id,
-        mercadoPagoId: asaasPayment.id,
-        status: asaasPayment.status,
+        mercadoPagoId: asaasResult.payment.id,
+        asaasId: asaasResult.payment.id,
+        status: asaasResult.payment.status,
         plan,
-        qrCode: pixQrCode?.payload || null,
-        qrCodeBase64: pixQrCode?.encodedImage || null,
-        expirationDate: pixQrCode?.expirationDate || null,
-        ticketUrl: asaasPayment.invoiceUrl || asaasPayment.bankSlipUrl || null,
+        qrCode:
+          asaasResult.qrCode?.payload ||
+          asaasResult.qrCode?.encodedImage ||
+          asaasResult.qrCode?.pixCopiaECola ||
+          null,
+        qrCodeBase64:
+          asaasResult.qrCode?.encodedImage ||
+          asaasResult.qrCode?.qrCodeBase64 ||
+          null,
+        ticketUrl:
+          asaasResult.payment?.invoiceUrl ||
+          asaasResult.payment?.bankSlipUrl ||
+          null,
       },
     });
   } catch (error) {
-    console.error("Erro em POST /api/payments/create (Asaas):", error);
+    console.error("Erro em POST /api/payments/create:", error);
 
     return NextResponse.json(
       {
         ok: false,
-        message: error.message || "Erro ao criar pagamento PIX no Asaas.",
+        message: error.message || "Erro ao criar pagamento.",
       },
       { status: 500 }
     );
