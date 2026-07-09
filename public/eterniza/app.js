@@ -1128,7 +1128,7 @@ function openPublishCheckout(){
   `);
 
   document.querySelectorAll('[data-publish-plan]').forEach(btn => {
-    btn.onclick = () => choosePaymentMethod(btn.dataset.publishPlan);
+    btn.onclick = () => createPreviewPix(btn.dataset.publishPlan);
   });
 }
 
@@ -1159,24 +1159,16 @@ async function ensureCurrentTributeSaved(){
 function choosePaymentMethod(planSlug){
   const plan = publishPaymentPlans.find(p => p.slug === planSlug) || publishPaymentPlans.find(p => p.slug === 'premium') || publishPaymentPlans[0];
   showPublishCheckoutStep(`
-    <h2>💳 Forma de pagamento</h2>
+    <h2>⚡ Pagamento PIX</h2>
     <p>Plano escolhido: <b>${esc(plan.name)}</b> • <b>${esc(plan.price)}</b></p>
-    <div class="eterniza-method-grid">
-      <button class="eterniza-method-card" type="button" id="payWithPix">
-        <strong>⚡ PIX</strong>
-        <span>Pagamento instantâneo via QR Code ou copia e cola.</span>
-      </button>
-      <button class="eterniza-method-card" type="button" id="payWithCard">
-        <strong>💳 Cartão de crédito</strong>
-        <span>Visa, Mastercard e cartões aceitos pelo Mercado Pago.</span>
-      </button>
+    <div class="eterniza-pix-box">
+      <p>O pagamento será feito por PIX dentro da Eterniza. Após a confirmação do Mercado Pago, sua história será publicada automaticamente.</p>
+      <button class="eterniza-pay-btn" type="button" id="payWithPixOnly">Gerar PIX agora</button>
+      <button class="eterniza-pay-secondary" type="button" id="backToPlans" style="margin-top:10px;width:100%">Voltar aos planos</button>
     </div>
-    <button class="eterniza-pay-secondary" type="button" id="backToPlans">Voltar aos planos</button>
   `);
-  const pix = document.getElementById('payWithPix');
+  const pix = document.getElementById('payWithPixOnly');
   if(pix) pix.onclick = () => createPreviewPix(plan.slug);
-  const card = document.getElementById('payWithCard');
-  if(card) card.onclick = () => openCardPayment(plan.slug);
   const back = document.getElementById('backToPlans');
   if(back) back.onclick = openPublishCheckout;
 }
@@ -1202,7 +1194,6 @@ async function getMercadoPagoPublicKey(){
   if(!res.ok || !data.ok || !data.publicKey){
     throw new Error('MP_PUBLIC_KEY não configurada na Vercel.');
   }
-  console.log('Mercado Pago Public Key prefix:', String(data.publicKey || '').slice(0, 12));
   return data.publicKey;
 }
 
