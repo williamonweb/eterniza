@@ -15,6 +15,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [checkout, setCheckout] = useState(null);
   const [modal, setModal] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   async function load() {
     try {
@@ -95,6 +96,35 @@ export default function DashboardPage() {
     });
   }
 
+  async function deleteTribute(tribute) {
+    try {
+      const res = await fetch("/api/tributes/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tributeId: tribute.id }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || "Não foi possível excluir a homenagem.");
+      }
+
+      setDeleteConfirm(null);
+      setModal({
+        title: "História excluída",
+        text: "A homenagem foi removida com sucesso.",
+      });
+      await load();
+    } catch (error) {
+      setDeleteConfirm(null);
+      setModal({
+        title: "Erro ao excluir",
+        text: error.message || "Não foi possível excluir a homenagem.",
+      });
+    }
+  }
+
   if (!mounted || loading) {
     return <main style={{ minHeight: "100vh", background: "#030606" }} />;
   }
@@ -153,6 +183,7 @@ export default function DashboardPage() {
                   tribute={tribute}
                   onPublish={() => setCheckout({ step: "plans", tribute })}
                   onCopy={copyText}
+                  onDelete={() => setDeleteConfirm(tribute)}
                 />
               ))}
             </div>
@@ -165,6 +196,14 @@ export default function DashboardPage() {
           checkout={checkout}
           onClose={() => setCheckout(null)}
           onCreatePayment={createPayment}
+        />
+      )}
+
+      {deleteConfirm && (
+        <DeleteConfirmModal
+          tribute={deleteConfirm}
+          onCancel={() => setDeleteConfirm(null)}
+          onConfirm={() => deleteTribute(deleteConfirm)}
         />
       )}
 
@@ -188,7 +227,7 @@ function Card({ number, label }) {
   );
 }
 
-function TributeCard({ tribute, onPublish, onCopy }) {
+function TributeCard({ tribute, onPublish, onCopy, onDelete }) {
   const status = String(tribute.status || "DRAFT").toUpperCase();
   const isPublished = status === "PUBLISHED";
   const title = tribute.receiver_name || tribute.title || "História";
@@ -227,11 +266,17 @@ function TributeCard({ tribute, onPublish, onCopy }) {
             <button onClick={() => onCopy(fullPublicUrl || publicUrl)}>
               Copiar link
             </button>
+            <button className="danger" onClick={onDelete}>
+              Excluir
+            </button>
           </>
         ) : (
           <>
             <a className="gold small" href="/criar">Continuar criando</a>
             <button onClick={onPublish}>❤️ Publicar história</button>
+            <button className="danger" onClick={onDelete}>
+              Excluir
+            </button>
           </>
         )}
       </div>
@@ -307,6 +352,31 @@ function CheckoutModal({ checkout, onClose, onCreatePayment }) {
   );
 }
 
+function DeleteConfirmModal({ tribute, onCancel, onConfirm }) {
+  const title = tribute?.receiver_name || tribute?.title || "esta história";
+
+  return (
+    <div className="modal-overlay">
+      <div className="info-modal danger-modal">
+        <span className="danger-icon">🗑️</span>
+        <h2>Excluir homenagem</h2>
+        <p>
+          Tem certeza que deseja excluir <strong>{title}</strong>?
+        </p>
+        <p className="danger-warning">
+          Esta ação é permanente e não poderá ser desfeita.
+        </p>
+        <div className="modal-actions">
+          <button onClick={onCancel}>Cancelar</button>
+          <button className="danger solid" onClick={onConfirm}>
+            Excluir
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function InfoModal({ title, text, onClose }) {
   return (
     <div className="modal-overlay">
@@ -344,6 +414,8 @@ function Style() {
 .public-link-box small{color:#f6cf72;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
 .public-link-box code{color:#fff8ea;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}.actions button,.plan button{border:1px solid rgba(239,189,82,.25);background:rgba(255,255,255,.06);color:#fff;border-radius:12px;padding:11px 14px;font-weight:900;cursor:pointer}
+.actions button.danger,.danger{border-color:rgba(255,92,92,.42)!important;color:#ffd6d6!important;background:rgba(255,70,70,.08)!important}
+.danger.solid{background:linear-gradient(135deg,#b91c1c,#ef4444)!important;border:0!important;color:#fff!important}
 .small{padding:11px 15px;font-size:14px}.full{width:100%}
 .empty{border:1px dashed rgba(239,189,82,.28);border-radius:22px;padding:30px;text-align:center;background:rgba(0,0,0,.18)}
 .empty h3{margin:0 0 8px;color:#f6cf72}.empty p{margin:0 0 18px;color:#ead9b7}
@@ -356,6 +428,11 @@ function Style() {
 .pix-img{width:280px;max-width:100%;background:#fff;border-radius:18px;padding:14px;margin:10px auto;display:block}
 textarea{width:100%;min-height:96px;border-radius:16px;border:1px solid rgba(239,189,82,.22);background:rgba(255,255,255,.08);color:#fff;padding:14px;box-sizing:border-box}
 .info-modal{width:min(480px,96vw);padding:28px;text-align:center}
+.danger-modal{border-color:rgba(255,92,92,.28)}
+.danger-icon{display:inline-flex;width:54px;height:54px;align-items:center;justify-content:center;border-radius:18px;background:rgba(255,70,70,.12);font-size:28px;margin-bottom:8px}
+.danger-warning{color:#ffd6d6!important;background:rgba(255,70,70,.08);border:1px solid rgba(255,92,92,.22);border-radius:16px;padding:12px}
+.modal-actions{display:flex;gap:10px;margin-top:18px}
+.modal-actions button{flex:1;border:1px solid rgba(239,189,82,.25);background:rgba(255,255,255,.06);color:#fff;border-radius:14px;padding:13px 16px;font-weight:1000;cursor:pointer}
 @media(max-width:850px){.client-page{padding:16px}.hero,.panel-head,.top{align-items:flex-start;flex-direction:column}.stats,.cards,.plan-grid{grid-template-columns:1fr}.hero h1{font-size:36px}}
 `}</style>
   );
