@@ -44,54 +44,6 @@ export default function DashboardPage() {
     load();
   }, []);
 
-  useEffect(() => {
-    if (checkout?.step !== "pix") return;
-
-    const tributeId = checkout?.tribute?.id;
-    const paymentId = checkout?.payment?.mercadoPagoId;
-
-    if (!tributeId && !paymentId) return;
-
-    let stopped = false;
-
-    async function checkPaymentStatus() {
-      try {
-        const params = new URLSearchParams();
-        if (tributeId) params.set("tributeId", tributeId);
-        if (paymentId) params.set("paymentId", paymentId);
-
-        const res = await fetch(`/api/payments/status?${params.toString()}`);
-        const data = await res.json();
-
-        if (!res.ok || !data?.ok || stopped) return;
-
-        if (data.published || String(data.paymentStatus || "").toUpperCase() === "APPROVED") {
-          stopped = true;
-          const publicUrl = data.publicUrl || (data.slug ? `/presente/${data.slug}` : (checkout.tribute?.slug ? `/presente/${checkout.tribute.slug}` : "/dashboard"));
-
-          setCheckout({
-            step: "success",
-            tribute: checkout.tribute,
-            planSlug: checkout.planSlug,
-            publicUrl,
-          });
-
-          await load();
-        }
-      } catch (error) {
-        console.warn("Erro ao consultar status do pagamento:", error);
-      }
-    }
-
-    checkPaymentStatus();
-    const timer = setInterval(checkPaymentStatus, 4000);
-
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-    };
-  }, [checkout]);
-
   const stats = useMemo(() => {
     const total = tributes.length;
     const drafts = tributes.filter((t) => String(t.status) === "DRAFT").length;
@@ -237,10 +189,14 @@ function Card({ number, label }) {
 }
 
 function TributeCard({ tribute, onPublish, onCopy }) {
-  const status = String(tribute.status || "DRAFT");
+  const status = String(tribute.status || "DRAFT").toUpperCase();
   const isPublished = status === "PUBLISHED";
   const title = tribute.receiver_name || tribute.title || "História";
   const publicUrl = tribute.slug ? `/presente/${tribute.slug}` : null;
+  const fullPublicUrl =
+    publicUrl && typeof window !== "undefined"
+      ? `${window.location.origin}${publicUrl}`
+      : publicUrl;
 
   return (
     <article className="tribute-card">
@@ -255,11 +211,20 @@ function TributeCard({ tribute, onPublish, onCopy }) {
       <h3>{title}</h3>
       <p>{tribute.category || "Presente"} • Eterniza</p>
 
+      {isPublished && publicUrl && (
+        <div className="public-link-box">
+          <small>Link público</small>
+          <code>{publicUrl}</code>
+        </div>
+      )}
+
       <div className="actions">
         {isPublished && publicUrl ? (
           <>
-            <a className="gold small" href={publicUrl} target="_blank">Ver história</a>
-            <button onClick={() => onCopy(window.location.origin + publicUrl)}>
+            <a className="gold small" href={publicUrl} target="_blank" rel="noreferrer">
+              Ver história
+            </a>
+            <button onClick={() => onCopy(fullPublicUrl || publicUrl)}>
               Copiar link
             </button>
           </>
@@ -335,27 +300,6 @@ function CheckoutModal({ checkout, onClose, onCreatePayment }) {
             >
               Copiar PIX copia e cola
             </button>
-
-            <div className="wait-box">
-              <span className="dash-spinner" />
-              <strong>Aguardando confirmação do pagamento...</strong>
-            </div>
-          </div>
-        )}
-
-        {checkout.step === "success" && (
-          <div className="payment-state">
-            <div className="success-mark">✓</div>
-            <h2>Pagamento confirmado!</h2>
-            <p>Sua história foi publicada automaticamente e já pode ser compartilhada.</p>
-            <div className="success-actions">
-              <a className="gold full" href={checkout.publicUrl || "/dashboard"} target="_blank">Abrir minha história</a>
-              <button
-                onClick={() => navigator.clipboard.writeText(window.location.origin + (checkout.publicUrl || "/dashboard"))}
-              >
-                Copiar link
-              </button>
-            </div>
           </div>
         )}
       </div>
@@ -396,6 +340,9 @@ function Style() {
 .pill{width:max-content;border:1px solid rgba(239,189,82,.28);color:#f6cf72;border-radius:999px;padding:7px 11px;font-size:13px;font-weight:900}
 .pill.published{border-color:rgba(100,255,160,.32);color:#8dffb2}
 .tribute-card h3{margin:4px 0 0;color:#fff8ea;font-size:22px}.tribute-card p{margin:0;color:#ead9b7}
+.public-link-box{border:1px solid rgba(239,189,82,.18);background:rgba(0,0,0,.22);border-radius:14px;padding:10px 12px;display:grid;gap:4px;max-width:100%;overflow:hidden}
+.public-link-box small{color:#f6cf72;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.public-link-box code{color:#fff8ea;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}.actions button,.plan button{border:1px solid rgba(239,189,82,.25);background:rgba(255,255,255,.06);color:#fff;border-radius:12px;padding:11px 14px;font-weight:900;cursor:pointer}
 .small{padding:11px 15px;font-size:14px}.full{width:100%}
 .empty{border:1px dashed rgba(239,189,82,.28);border-radius:22px;padding:30px;text-align:center;background:rgba(0,0,0,.18)}
@@ -409,7 +356,6 @@ function Style() {
 .pix-img{width:280px;max-width:100%;background:#fff;border-radius:18px;padding:14px;margin:10px auto;display:block}
 textarea{width:100%;min-height:96px;border-radius:16px;border:1px solid rgba(239,189,82,.22);background:rgba(255,255,255,.08);color:#fff;padding:14px;box-sizing:border-box}
 .info-modal{width:min(480px,96vw);padding:28px;text-align:center}
-.wait-box{margin-top:16px;display:flex;align-items:center;justify-content:center;gap:10px;color:#f6cf72;font-weight:1000}.dash-spinner{width:20px;height:20px;border-radius:50%;border:3px solid rgba(246,207,114,.22);border-top-color:#f6cf72;display:inline-block;animation:dashSpin .85s linear infinite}.success-mark{width:82px;height:82px;border-radius:50%;margin:0 auto 16px;background:linear-gradient(135deg,#42d47d,#b9ffcf);color:#07120b;display:flex;align-items:center;justify-content:center;font-size:44px;font-weight:1000}.success-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}.success-actions button{border:1px solid rgba(239,189,82,.25);background:rgba(255,255,255,.06);color:#fff;border-radius:15px;padding:14px 18px;font-weight:1000;cursor:pointer}@keyframes dashSpin{to{transform:rotate(360deg)}}
 @media(max-width:850px){.client-page{padding:16px}.hero,.panel-head,.top{align-items:flex-start;flex-direction:column}.stats,.cards,.plan-grid{grid-template-columns:1fr}.hero h1{font-size:36px}}
 `}</style>
   );
