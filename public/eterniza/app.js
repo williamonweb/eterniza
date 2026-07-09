@@ -969,6 +969,44 @@ function renderAdminSection(section=activeAdminSection){
 }
 function renderOrders(){ renderAdminSection(activeAdminSection||'dashboard'); }
 
+
+async function loadPublicTributeBySlug(slug){
+  try{
+    go('landingScreen');
+    showModal('Carregando história','Estamos abrindo esta homenagem Eterniza.');
+    const res = await fetch(`/api/tributes/public/${encodeURIComponent(slug)}`);
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok || !data.ok || !data.tribute){
+      throw new Error(data.message || 'Esta página ainda não existe ou não foi publicada.');
+    }
+    const tribute = data.tribute;
+    const content = tribute.content && typeof tribute.content === 'object' ? tribute.content : {};
+    state = {
+      ...state,
+      ...content,
+      tributeId: tribute.id,
+      slug: tribute.slug,
+      publicUrl: tribute.public_url || tribute.publicUrl || `/presente/${tribute.slug}`,
+      receiverName: content.receiverName || tribute.receiver_name || tribute.title || 'Homenagem',
+      senderName: content.senderName || tribute.sender_name || '',
+      letterText: content.letterText || tribute.message || content.message || '',
+      photos: Array.isArray(content.photos) && content.photos.length ? content.photos : (tribute.photos || []).map(p=>p.url).filter(Boolean),
+      plan: content.plan || state.plan || plans.find(p=>p.id==='premium'),
+      recipient: content.recipient || state.recipient || recipients.find(r=>r.id==='outro'),
+      status: 'PUBLISHED'
+    };
+    document.body.dataset.publicGift='true';
+    renderPreview();
+    go('previewScreen');
+    const modal = document.getElementById('modal');
+    if(modal) modal.classList.add('hidden');
+    setTimeout(()=>{document.querySelector('.gift-preview')?.scrollIntoView({behavior:'smooth',block:'start'});},250);
+  }catch(error){
+    go('landingScreen');
+    showModal('Link não encontrado', error.message || 'Esta página ainda não existe.');
+  }
+}
+
 function openRoute(){
   const params = new URLSearchParams(location.search || '');
   const route = params.get('route') || '';
@@ -989,8 +1027,9 @@ function openRoute(){
     const decodedSlug = decodeURIComponent(params.get('slug') || '');
     if(decodedSlug==='demo' || decodedSlug==='demo-maria-e-jose') ensureDemoOrder();
     const order=orders.find(o=>o.slug===decodedSlug);
-    if(order){state={...state,...order};saveState();renderPreview();go('previewScreen');document.body.dataset.publicGift='true';setTimeout(()=>{document.querySelector('.gift-preview')?.scrollIntoView({behavior:'smooth',block:'start'});},250);return true;}
-    go('landingScreen');showModal('Link não encontrado','Este presente ainda não existe neste navegador.');return true;
+    if(order){state={...state,...order};renderPreview();go('previewScreen');document.body.dataset.publicGift='true';setTimeout(()=>{document.querySelector('.gift-preview')?.scrollIntoView({behavior:'smooth',block:'start'});},250);return true;}
+    if(decodedSlug){ loadPublicTributeBySlug(decodedSlug); return true; }
+    go('landingScreen');showModal('Link não encontrado','Este presente ainda não existe.');return true;
   }
   if(sectionParam){ go('landingScreen'); setTimeout(()=>document.getElementById(sectionParam)?.scrollIntoView({behavior:'smooth',block:'start'}),120); return true; }
   const hash=location.hash || '';
@@ -1020,8 +1059,9 @@ function openRoute(){
     const decodedSlug=decodeURIComponent(slug);
     if(decodedSlug==='demo' || decodedSlug==='demo-maria-e-jose') ensureDemoOrder();
     const order=orders.find(o=>o.slug===decodedSlug);
-    if(order){state={...state,...order};saveState();renderPreview();go('previewScreen');document.body.dataset.publicGift='true';setTimeout(()=>{document.querySelector('.gift-preview')?.scrollIntoView({behavior:'smooth',block:'start'});},250);return true;}
-    go('landingScreen');showModal('Link não encontrado','Este presente ainda não existe neste navegador.');return true;
+    if(order){state={...state,...order};renderPreview();go('previewScreen');document.body.dataset.publicGift='true';setTimeout(()=>{document.querySelector('.gift-preview')?.scrollIntoView({behavior:'smooth',block:'start'});},250);return true;}
+    if(decodedSlug){ loadPublicTributeBySlug(decodedSlug); return true; }
+    go('landingScreen');showModal('Link não encontrado','Este presente ainda não existe.');return true;
   }
   const anchor=(hash.match(/^#(como-funciona|exemplos|planos|perguntas)$/)||[])[1];
   if(anchor){
@@ -1230,7 +1270,6 @@ async function createPreviewPix(planSlug){
     }
 
     const payment = data.payment || {};
-    const providerPaymentId = payment.asaasId || payment.asaasPaymentId || payment.mercadoPagoId || payment.providerId || payment.id || '';
     showPublishCheckoutStep(`
       <div class="eterniza-pix-box">
         <h2>PIX gerado com sucesso</h2>
@@ -1252,7 +1291,7 @@ async function createPreviewPix(planSlug){
       };
     }
 
-    startPublishStatusPolling(tribute.id, tribute.slug || state.slug, providerPaymentId);
+    startPublishStatusPolling(tribute.id, tribute.slug || state.slug);
   }catch(error){
     showPublishCheckoutStep(`
       <div class="eterniza-pix-box">
@@ -1266,67 +1305,42 @@ async function createPreviewPix(planSlug){
   }
 }
 
-function showPublishedSuccess(url){
-  showPublishCheckoutStep(`
-    <div class="eterniza-pix-box">
-      <div class="eterniza-success-mark">✓</div>
-      <h2>Pagamento aprovado!</h2>
-      <p>Sua história agora vive para sempre.</p>
-      <div class="eterniza-success-actions">
-        <button class="eterniza-pay-btn" type="button" id="openPublishedStory">Abrir minha história</button>
-        <button class="eterniza-pay-secondary" type="button" id="copyPublishedStory">Copiar link</button>
-      </div>
-    </div>
-  `);
-  const open = document.getElementById('openPublishedStory');
-  if(open) open.onclick = () => navigateTop(url, false);
-  const copy = document.getElementById('copyPublishedStory');
-  if(copy) copy.onclick = () => {
-    const fullUrl = url.startsWith('http') ? url : (location.origin + url);
-    navigator.clipboard?.writeText(fullUrl);
-    copy.textContent = 'Link copiado!';
-    setTimeout(()=>copy.textContent='Copiar link',1800);
-  };
-}
-
-function startPublishStatusPolling(tributeId, fallbackSlug, providerPaymentId){
+function startPublishStatusPolling(tributeId, fallbackSlug){
   if(publishPollTimer) clearInterval(publishPollTimer);
-  const checkStatus = async()=>{
+  publishPollTimer = setInterval(async()=>{
     try{
-      const params = new URLSearchParams();
-      if(tributeId) params.set('tributeId', tributeId);
-      if(providerPaymentId) params.set('paymentId', providerPaymentId);
-      const res = await fetch(`/api/payments/status?${params.toString()}`);
-      const data = await res.json().catch(()=>({}));
-      if(res.ok && data.ok){
-        const statusEl = document.getElementById('publishPaymentStatus');
-        if(statusEl && data.asaasStatus){
-          statusEl.innerHTML = `<span class="eterniza-spinner"></span><span>Status: ${esc(data.asaasStatus)}. Aguardando confirmação...</span>`;
-        }
-        if(data.published || String(data.paymentStatus || '').toUpperCase() === 'APPROVED'){
-          clearInterval(publishPollTimer);
-          publishPollTimer = null;
-          const url = data.publicUrl || (data.slug ? `/presente/${data.slug}` : (fallbackSlug ? `/presente/${fallbackSlug}` : '/dashboard'));
-          showPublishedSuccess(url);
-          return;
-        }
-      }
-
-      const fallbackRes = await fetch('/api/tributes/list');
-      const fallbackData = await fallbackRes.json();
-      if(!fallbackData.ok || !Array.isArray(fallbackData.tributes)) return;
-      const tribute = fallbackData.tributes.find(t => t.id === tributeId);
+      const res = await fetch('/api/tributes/list');
+      const data = await res.json();
+      if(!data.ok || !Array.isArray(data.tributes)) return;
+      const tribute = data.tributes.find(t => t.id === tributeId);
       if(!tribute) return;
       if(String(tribute.status).toUpperCase() === 'PUBLISHED'){
         clearInterval(publishPollTimer);
         publishPollTimer = null;
         const url = tribute.public_url || tribute.publicUrl || (tribute.slug ? `/presente/${tribute.slug}` : (fallbackSlug ? `/presente/${fallbackSlug}` : '/dashboard'));
-        showPublishedSuccess(url);
+        showPublishCheckoutStep(`
+          <div class="eterniza-pix-box">
+            <div class="eterniza-success-mark">✓</div>
+            <h2>Pagamento aprovado!</h2>
+            <p>Sua história agora vive para sempre.</p>
+            <div class="eterniza-success-actions">
+              <button class="eterniza-pay-btn" type="button" id="openPublishedStory">Abrir minha história</button>
+              <button class="eterniza-pay-secondary" type="button" id="copyPublishedStory">Copiar link</button>
+            </div>
+          </div>
+        `);
+        const open = document.getElementById('openPublishedStory');
+        if(open) open.onclick = () => navigateTop(url, false);
+        const copy = document.getElementById('copyPublishedStory');
+        if(copy) copy.onclick = () => {
+          const fullUrl = url.startsWith('http') ? url : (location.origin + url);
+          navigator.clipboard?.writeText(fullUrl);
+          copy.textContent = 'Link copiado!';
+          setTimeout(()=>copy.textContent='Copiar link',1800);
+        };
       }
     }catch(e){}
-  };
-  checkStatus();
-  publishPollTimer = setInterval(checkStatus, 5000);
+  }, 5000);
 }
 /* ===== Fim Checkout PIX direto na prévia ===== */
 
