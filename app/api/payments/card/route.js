@@ -92,7 +92,6 @@ export async function POST(req) {
         pending: `${baseUrl}/dashboard?payment=pending&tribute=${encodeURIComponent(tribute.id)}`,
         failure: `${baseUrl}/dashboard?payment=failure&tribute=${encodeURIComponent(tribute.id)}`,
       },
-      auto_return: "approved",
       items: [
         {
           id: plan.slug,
@@ -106,14 +105,6 @@ export async function POST(req) {
       payer: {
         email: user.email,
         name: user.name || "Cliente Eterniza",
-      },
-      payment_methods: {
-        excluded_payment_types: [
-          { id: "ticket" },
-          { id: "atm" },
-          { id: "bank_transfer" },
-        ],
-        installments: 1,
       },
       metadata: {
         tribute_id: tribute.id,
