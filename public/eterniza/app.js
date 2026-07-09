@@ -1230,6 +1230,7 @@ async function createPreviewPix(planSlug){
     }
 
     const payment = data.payment || {};
+    const providerPaymentId = payment.asaasId || payment.asaasPaymentId || payment.mercadoPagoId || payment.providerId || payment.id || '';
     showPublishCheckoutStep(`
       <div class="eterniza-pix-box">
         <h2>PIX gerado com sucesso</h2>
@@ -1251,7 +1252,7 @@ async function createPreviewPix(planSlug){
       };
     }
 
-    startPublishStatusPolling(tribute.id, tribute.slug || state.slug);
+    startPublishStatusPolling(tribute.id, tribute.slug || state.slug, providerPaymentId);
   }catch(error){
     showPublishCheckoutStep(`
       <div class="eterniza-pix-box">
@@ -1265,42 +1266,67 @@ async function createPreviewPix(planSlug){
   }
 }
 
-function startPublishStatusPolling(tributeId, fallbackSlug){
+function showPublishedSuccess(url){
+  showPublishCheckoutStep(`
+    <div class="eterniza-pix-box">
+      <div class="eterniza-success-mark">✓</div>
+      <h2>Pagamento aprovado!</h2>
+      <p>Sua história agora vive para sempre.</p>
+      <div class="eterniza-success-actions">
+        <button class="eterniza-pay-btn" type="button" id="openPublishedStory">Abrir minha história</button>
+        <button class="eterniza-pay-secondary" type="button" id="copyPublishedStory">Copiar link</button>
+      </div>
+    </div>
+  `);
+  const open = document.getElementById('openPublishedStory');
+  if(open) open.onclick = () => navigateTop(url, false);
+  const copy = document.getElementById('copyPublishedStory');
+  if(copy) copy.onclick = () => {
+    const fullUrl = url.startsWith('http') ? url : (location.origin + url);
+    navigator.clipboard?.writeText(fullUrl);
+    copy.textContent = 'Link copiado!';
+    setTimeout(()=>copy.textContent='Copiar link',1800);
+  };
+}
+
+function startPublishStatusPolling(tributeId, fallbackSlug, providerPaymentId){
   if(publishPollTimer) clearInterval(publishPollTimer);
-  publishPollTimer = setInterval(async()=>{
+  const checkStatus = async()=>{
     try{
-      const res = await fetch('/api/tributes/list');
-      const data = await res.json();
-      if(!data.ok || !Array.isArray(data.tributes)) return;
-      const tribute = data.tributes.find(t => t.id === tributeId);
+      const params = new URLSearchParams();
+      if(tributeId) params.set('tributeId', tributeId);
+      if(providerPaymentId) params.set('paymentId', providerPaymentId);
+      const res = await fetch(`/api/payments/status?${params.toString()}`);
+      const data = await res.json().catch(()=>({}));
+      if(res.ok && data.ok){
+        const statusEl = document.getElementById('publishPaymentStatus');
+        if(statusEl && data.asaasStatus){
+          statusEl.innerHTML = `<span class="eterniza-spinner"></span><span>Status: ${esc(data.asaasStatus)}. Aguardando confirmação...</span>`;
+        }
+        if(data.published || String(data.paymentStatus || '').toUpperCase() === 'APPROVED'){
+          clearInterval(publishPollTimer);
+          publishPollTimer = null;
+          const url = data.publicUrl || (data.slug ? `/presente/${data.slug}` : (fallbackSlug ? `/presente/${fallbackSlug}` : '/dashboard'));
+          showPublishedSuccess(url);
+          return;
+        }
+      }
+
+      const fallbackRes = await fetch('/api/tributes/list');
+      const fallbackData = await fallbackRes.json();
+      if(!fallbackData.ok || !Array.isArray(fallbackData.tributes)) return;
+      const tribute = fallbackData.tributes.find(t => t.id === tributeId);
       if(!tribute) return;
       if(String(tribute.status).toUpperCase() === 'PUBLISHED'){
         clearInterval(publishPollTimer);
         publishPollTimer = null;
         const url = tribute.public_url || tribute.publicUrl || (tribute.slug ? `/presente/${tribute.slug}` : (fallbackSlug ? `/presente/${fallbackSlug}` : '/dashboard'));
-        showPublishCheckoutStep(`
-          <div class="eterniza-pix-box">
-            <div class="eterniza-success-mark">✓</div>
-            <h2>Pagamento aprovado!</h2>
-            <p>Sua história agora vive para sempre.</p>
-            <div class="eterniza-success-actions">
-              <button class="eterniza-pay-btn" type="button" id="openPublishedStory">Abrir minha história</button>
-              <button class="eterniza-pay-secondary" type="button" id="copyPublishedStory">Copiar link</button>
-            </div>
-          </div>
-        `);
-        const open = document.getElementById('openPublishedStory');
-        if(open) open.onclick = () => navigateTop(url, false);
-        const copy = document.getElementById('copyPublishedStory');
-        if(copy) copy.onclick = () => {
-          const fullUrl = url.startsWith('http') ? url : (location.origin + url);
-          navigator.clipboard?.writeText(fullUrl);
-          copy.textContent = 'Link copiado!';
-          setTimeout(()=>copy.textContent='Copiar link',1800);
-        };
+        showPublishedSuccess(url);
       }
     }catch(e){}
-  }, 5000);
+  };
+  checkStatus();
+  publishPollTimer = setInterval(checkStatus, 5000);
 }
 /* ===== Fim Checkout PIX direto na prévia ===== */
 
