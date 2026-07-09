@@ -1076,7 +1076,7 @@ function checkoutStyle(){
       .eterniza-method-card strong{display:block;font-size:22px;margin-bottom:8px;color:#fff8ea}
       .eterniza-method-card span{display:block;color:#ead9b7;line-height:1.35}
       .eterniza-card-box{max-width:680px;margin:0 auto}
-      #eternizaCardBrick{margin-top:18px;background:#fff;border-radius:18px;padding:12px;color:#111}
+      #eternizaCardBrick,#eternizaPaymentBrick{margin-top:18px;background:#fff;border-radius:18px;padding:12px;color:#111}
       .eterniza-back-row{display:flex;justify-content:flex-start;margin-bottom:16px}
       @keyframes eternizaSpin{to{transform:rotate(360deg)}}
       @keyframes eternizaPop{0%{transform:scale(.65);opacity:0}70%{transform:scale(1.08);opacity:1}100%{transform:scale(1)}}
@@ -1213,8 +1213,8 @@ async function openCardPayment(planSlug){
       <div class="eterniza-card-box">
         <div class="eterniza-back-row"><button class="eterniza-pay-secondary" type="button" id="backToMethods">← Voltar</button></div>
         <h2>💳 Pagar com cartão</h2>
-        <p>Plano ${esc(plan.name)} • ${esc(plan.price)}. Preencha os dados pelo formulário seguro do Mercado Pago.</p>
-        <div id="eternizaCardBrick"></div>
+        <p>Plano ${esc(plan.name)} • ${esc(plan.price)}. O pagamento é processado com segurança pelo Mercado Pago.</p>
+        <div id="eternizaPaymentBrick"></div>
         <div class="eterniza-pay-status" id="cardPaymentStatus" style="display:none"><span class="eterniza-spinner"></span><span>Processando pagamento...</span></div>
       </div>
     `);
@@ -1233,7 +1233,7 @@ async function openCardPayment(planSlug){
       window.eternizaCardBrickController = null;
     }
 
-    window.eternizaCardBrickController = await bricksBuilder.create('cardPayment', 'eternizaCardBrick', {
+    window.eternizaCardBrickController = await bricksBuilder.create('payment', 'eternizaPaymentBrick', {
       initialization: {
         amount: Number(plan.amount || 39.9),
         payer: {
@@ -1247,33 +1247,34 @@ async function openCardPayment(planSlug){
           }
         },
         paymentMethods: {
-          types: {
-            excluded: ['debit_card', 'prepaid_card']
-          }
+          creditCard: 'all',
+          debitCard: 'none',
+          ticket: 'none',
+          bankTransfer: 'none',
+          atm: 'none',
+          maxInstallments: 1
         }
       },
       callbacks: {
         onReady: () => {},
-        onSubmit: async (cardFormData, additionalData) => {
-          const formData = cardFormData && cardFormData.formData ? cardFormData.formData : cardFormData;
-          console.log('Mercado Pago cardFormData bruto:', cardFormData);
-          console.log('Mercado Pago formData enviado:', formData);
-          console.log('Mercado Pago additionalData:', additionalData);
-
+        onSubmit: ({ selectedPaymentMethod, formData }) => {
           return new Promise(async (resolve, reject) => {
-            try {
+            try{
               const status = document.getElementById('cardPaymentStatus');
               if(status) status.style.display = 'flex';
 
-              if(!formData || !formData.token || !formData.payment_method_id){
-                throw new Error('O Mercado Pago não gerou o token do cartão. Confirme se MP_PUBLIC_KEY e MP_ACCESS_TOKEN são do mesmo ambiente TEST ou PRODUÇÃO, faça redeploy na Vercel e tente novamente.');
+              const paymentData = formData || {};
+
+              if(!paymentData.token || !paymentData.payment_method_id){
+                throw new Error('O Mercado Pago não retornou token do cartão. Tente novamente ou use PIX.');
               }
 
               const res = await fetch('/api/payments/card', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  ...formData,
+                  ...paymentData,
+                  selectedPaymentMethod,
                   tributeId: tribute.id,
                   plan: plan.slug
                 })
@@ -1301,7 +1302,7 @@ async function openCardPayment(planSlug){
               }
 
               resolve();
-            } catch(error) {
+            }catch(error){
               const status = document.getElementById('cardPaymentStatus');
               if(status) status.style.display = 'none';
 
@@ -1325,7 +1326,7 @@ async function openCardPayment(planSlug){
           });
         },
         onError: (error) => {
-          console.error('Erro no Card Payment Brick:', error);
+          console.error('Erro no Payment Brick:', error);
         }
       }
     });
