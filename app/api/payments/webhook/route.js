@@ -1,86 +1,58 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
+import { getAsaasPayment } from "../../../../lib/asaas";
 
-async function getMercadoPagoPayment(paymentId) {
-  const accessToken = process.env.MP_ACCESS_TOKEN;
+function normalizeAsaasStatus(status) {
+  const normalized = String(status || "").toUpperCase();
 
-  if (!accessToken) {
-    throw new Error("MP_ACCESS_TOKEN não configurado no .env");
+  if (["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(normalized)) {
+    return "APPROVED";
   }
 
-  const response = await fetch(
-    `https://api.mercadopago.com/v1/payments/${paymentId}`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    }
-  );
+  if (["REFUNDED"].includes(normalized)) return "REFUNDED";
+  if (["OVERDUE", "DELETED", "CANCELLED"].includes(normalized)) return "CANCELLED";
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    console.error("Erro ao consultar pagamento Mercado Pago:", data);
-    throw new Error(data?.message || "Erro ao consultar pagamento.");
-  }
-
-  return data;
+  return "PENDING";
 }
 
-function extractPaymentId(body, url) {
+function isPaidAsaasEvent(event, status) {
+  const ev = String(event || "").toUpperCase();
+  const st = String(status || "").toUpperCase();
+
   return (
-    body?.data?.id ||
-    body?.id ||
-    body?.resource?.split?.("/")?.pop() ||
-    url.searchParams.get("id") ||
-    url.searchParams.get("data.id")
+    ["PAYMENT_RECEIVED", "PAYMENT_CONFIRMED", "PAYMENT_RECEIVED_IN_CASH"].includes(ev) ||
+    ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(st)
   );
 }
 
 export async function POST(req) {
   try {
-    const url = new URL(req.url);
     const body = await req.json().catch(() => ({}));
+    const event = body?.event || "";
+    let asaasPayment = body?.payment || null;
 
-    const type = body?.type || body?.topic || url.searchParams.get("type");
-    const paymentId = extractPaymentId(body, url);
-
-    if (type && !String(type).includes("payment")) {
-      return NextResponse.json({
-        ok: true,
-        ignored: true,
-        message: "Notificação ignorada.",
-      });
-    }
-
-    if (!paymentId) {
+    if (!asaasPayment?.id) {
       return NextResponse.json(
-        { ok: false, message: "ID do pagamento não encontrado." },
+        { ok: false, message: "ID da cobrança Asaas não encontrado." },
         { status: 400 }
       );
     }
 
-    const mpPayment = await getMercadoPagoPayment(paymentId);
+    // Alguns webhooks podem vir com objeto reduzido. Buscamos a cobrança completa para garantir externalReference/status.
+    try {
+      asaasPayment = await getAsaasPayment(asaasPayment.id);
+    } catch (error) {
+      console.warn("Não foi possível consultar cobrança completa no Asaas. Usando payload do webhook.", error);
+    }
 
-    const mercadoPagoId = String(mpPayment.id);
-    const tributeId = String(mpPayment.external_reference || "");
-    const status = String(mpPayment.status || "").toLowerCase();
-
-    const paymentStatus =
-      status === "approved"
-        ? "APPROVED"
-        : status === "rejected"
-        ? "REJECTED"
-        : status === "cancelled"
-        ? "CANCELLED"
-        : status === "refunded"
-        ? "REFUNDED"
-        : "PENDING";
+    const asaasId = String(asaasPayment.id);
+    const tributeId = String(asaasPayment.externalReference || "");
+    const status = String(asaasPayment.status || "").toUpperCase();
+    const paymentStatus = normalizeAsaasStatus(status);
 
     const existingPayment = await prisma.payment.findFirst({
       where: {
-        mercadoPagoId,
+        mercadoPagoId: asaasId,
       },
     });
 
@@ -97,14 +69,14 @@ export async function POST(req) {
       await prisma.payment.create({
         data: {
           tributeId,
-          mercadoPagoId,
+          mercadoPagoId: asaasId,
           status: paymentStatus,
-          amount: Number(mpPayment.transaction_amount || 0),
+          amount: Number(asaasPayment.value || 0),
         },
       });
     }
 
-    if (status === "approved" && tributeId) {
+    if (tributeId && isPaidAsaasEvent(event, status)) {
       await prisma.tribute.update({
         where: {
           id: tributeId,
@@ -117,19 +89,21 @@ export async function POST(req) {
 
     return NextResponse.json({
       ok: true,
-      mercadoPagoId,
+      provider: "asaas",
+      event,
+      asaasId,
       tributeId,
-      mercadoPagoStatus: status,
+      asaasStatus: status,
       paymentStatus,
-      published: status === "approved",
+      published: tributeId ? isPaidAsaasEvent(event, status) : false,
     });
   } catch (error) {
-    console.error("Erro em POST /api/payments/webhook:", error);
+    console.error("Erro em POST /api/payments/webhook (Asaas):", error);
 
     return NextResponse.json(
       {
         ok: false,
-        message: error.message || "Erro no webhook.",
+        message: error.message || "Erro no webhook Asaas.",
       },
       { status: 500 }
     );
@@ -139,6 +113,7 @@ export async function POST(req) {
 export async function GET() {
   return NextResponse.json({
     ok: true,
-    message: "Webhook Mercado Pago ativo.",
+    provider: "asaas",
+    message: "Webhook Asaas ativo.",
   });
 }

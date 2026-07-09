@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { getCurrentUser } from "../../../../lib/auth";
-import { createPixPayment, getPlanBySlug } from "../../../../lib/mercadopago";
+import { createAsaasPixPayment, getPlanBySlug } from "../../../../lib/asaas";
 
 export async function POST(req) {
   try {
@@ -15,7 +15,6 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-
     const tributeId = String(body.tributeId || "");
     const planSlug = String(body.plan || "premium");
 
@@ -41,44 +40,47 @@ export async function POST(req) {
     }
 
     const plan = getPlanBySlug(planSlug);
-
-    const mpPayment = await createPixPayment({
+    const asaasResult = await createAsaasPixPayment({
       tributeId: tribute.id,
       payerEmail: user.email,
       payerName: user.name,
       plan,
     });
 
-    const qrData = mpPayment?.point_of_interaction?.transaction_data;
+    const asaasPayment = asaasResult.payment;
+    const pixQrCode = asaasResult.qrCode;
 
     const payment = await prisma.payment.create({
       data: {
         tributeId: tribute.id,
         amount: plan.price,
         status: "PENDING",
-        mercadoPagoId: String(mpPayment.id),
+        mercadoPagoId: String(asaasPayment.id),
       },
     });
 
     return NextResponse.json({
       ok: true,
+      provider: "asaas",
       payment: {
         id: payment.id,
-        mercadoPagoId: mpPayment.id,
-        status: mpPayment.status,
+        asaasId: asaasPayment.id,
+        mercadoPagoId: asaasPayment.id,
+        status: asaasPayment.status,
         plan,
-        qrCode: qrData?.qr_code || null,
-        qrCodeBase64: qrData?.qr_code_base64 || null,
-        ticketUrl: qrData?.ticket_url || null,
+        qrCode: pixQrCode?.payload || null,
+        qrCodeBase64: pixQrCode?.encodedImage || null,
+        expirationDate: pixQrCode?.expirationDate || null,
+        ticketUrl: asaasPayment.invoiceUrl || asaasPayment.bankSlipUrl || null,
       },
     });
   } catch (error) {
-    console.error("Erro em POST /api/payments/create:", error);
+    console.error("Erro em POST /api/payments/create (Asaas):", error);
 
     return NextResponse.json(
       {
         ok: false,
-        message: error.message || "Erro ao criar pagamento.",
+        message: error.message || "Erro ao criar pagamento PIX no Asaas.",
       },
       { status: 500 }
     );

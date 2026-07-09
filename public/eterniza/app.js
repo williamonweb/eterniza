@@ -909,7 +909,7 @@ function renderAdminSection(section=activeAdminSection){
     box.innerHTML=adminHeader('Dashboard','Visão geral da operação, vendas simuladas e próximos passos.',`<button id="adminNewGiftBtn" class="primary-btn">Novo presente</button>`)+adminStatsHtml()+
     `<div class="admin-growth-grid clickable-modules">
       ${[
-        ['clientes','👥 Clientes','Cadastros, WhatsApp e histórico'],['homenagens','🎁 Homenagens','Links, status e publicações'],['biblioteca','🎵 Biblioteca','Trilhas Eterniza e YouTube'],['escritor','🤖 Escritor Eterniza','Cartas por emoção e tamanho'],['cupons','🎟️ Cupons','Datas comemorativas e descontos'],['pagamentos','💳 Pagamentos','Pix, cartão e Mercado Pago'],['analytics','📊 Analytics','Visualizações, QR e dispositivos'],['qrcode','▦ QR Code','PNG, PDF, etiqueta e cartão'],['whatsapp','📱 WhatsApp','Mensagens prontas para clientes'],['configuracoes','⚙️ Configurações','Logo, planos, domínio e APIs']
+        ['clientes','👥 Clientes','Cadastros, WhatsApp e histórico'],['homenagens','🎁 Homenagens','Links, status e publicações'],['biblioteca','🎵 Biblioteca','Trilhas Eterniza e YouTube'],['escritor','🤖 Escritor Eterniza','Cartas por emoção e tamanho'],['cupons','🎟️ Cupons','Datas comemorativas e descontos'],['pagamentos','💳 Pagamentos','Pix, cartão e Asaas'],['analytics','📊 Analytics','Visualizações, QR e dispositivos'],['qrcode','▦ QR Code','PNG, PDF, etiqueta e cartão'],['whatsapp','📱 WhatsApp','Mensagens prontas para clientes'],['configuracoes','⚙️ Configurações','Logo, planos, domínio e APIs']
       ].map(x=>`<button class="admin-module admin-module-btn" type="button" data-admin-section="${x[0]}"><strong>${x[1]}</strong><span>${x[2]}</span></button>`).join('')}
     </div>
     <div class="admin-panel-pro"><h3>Últimas homenagens</h3><div class="orders-list">${orders.length?orders.slice(0,3).map(orderCard).join(''):'<p>Nenhum pedido encontrado.</p>'}</div></div>`;
@@ -940,9 +940,9 @@ function renderAdminSection(section=activeAdminSection){
     `<div class="admin-grid-3">${['AMOR10','MAE15','PREMIUM20'].map((c,i)=>`<div class="admin-template-card"><b>🎟️ ${c}</b><p>${[10,15,20][i]}% de desconto • Ativo</p><button class="ghost-btn small" data-admin-modal="Cupom ${c}|Editar validade, limite e planos participantes.">Editar</button></div>`).join('')}</div>`;
   }
   if(section==='pagamentos'){
-    box.innerHTML=adminHeader('Pagamentos','Controle Pix, cartão, renovações e integração Mercado Pago.',`<button class="primary-btn" data-admin-modal="Mercado Pago|Configuração do token e webhooks ficará em Configurações.">Configurar Mercado Pago</button>`)+
+    box.innerHTML=adminHeader('Pagamentos','Controle Pix, cartão, renovações e integração Asaas.',`<button class="primary-btn" data-admin-modal="Asaas|Configuração do token e webhooks ficará em Configurações.">Configurar Asaas</button>`)+
     `<div class="admin-dashboard"><div class="admin-stat"><strong>${adminMoney(total)}</strong><span>recebido</span></div><div class="admin-stat"><strong>${adminMoney(0)}</strong><span>pendente</span></div><div class="admin-stat"><strong>${published.length}</strong><span>links ativos</span></div></div>
-    <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Pedido</th><th>Cliente</th><th>Forma</th><th>Valor</th><th>Status</th></tr></thead><tbody>${orders.map(o=>`<tr><td>${esc(o.receiverName)}</td><td>${esc(o.userEmail||'cliente')}</td><td>Pix/Mercado Pago</td><td>${adminMoney((o.plan?.cents||0)/100)}</td><td><span class="status">Simulado</span></td></tr>`).join('')||'<tr><td colspan="5">Nenhum pagamento ainda.</td></tr>'}</tbody></table></div>`;
+    <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Pedido</th><th>Cliente</th><th>Forma</th><th>Valor</th><th>Status</th></tr></thead><tbody>${orders.map(o=>`<tr><td>${esc(o.receiverName)}</td><td>${esc(o.userEmail||'cliente')}</td><td>Pix/Asaas</td><td>${adminMoney((o.plan?.cents||0)/100)}</td><td><span class="status">Simulado</span></td></tr>`).join('')||'<tr><td colspan="5">Nenhum pagamento ainda.</td></tr>'}</tbody></table></div>`;
   }
   if(section==='analytics'){
     box.innerHTML=adminHeader('Analytics','Visualizações, origem dos acessos, QR Codes e dispositivos.')+
@@ -959,7 +959,7 @@ function renderAdminSection(section=activeAdminSection){
   }
   if(section==='configuracoes'){
     box.innerHTML=adminHeader('Configurações','Controle marca, planos, preços, domínio e integrações.')+
-    `<div class="admin-grid-2"><div class="admin-panel-pro"><h3>Marca</h3><label>Nome da marca</label><input class="admin-search" value="Eterniza"><label>Slogan</label><input class="admin-search" value="Onde Cada História Vive Para Sempre!"><button class="primary-btn full" data-admin-modal="Configurações salvas|Na próxima etapa salvaremos no banco de dados.">Salvar marca</button></div><div class="admin-panel-pro"><h3>Integrações</h3><div class="settings-line"><span>YouTube API</span><b>Configurada</b></div><div class="settings-line"><span>Mercado Pago</span><b>Pendente</b></div><div class="settings-line"><span>OpenAI/IA</span><b>Pendente</b></div><div class="settings-line"><span>Domínio</span><b>eterniza.com.br</b></div></div></div>`;
+    `<div class="admin-grid-2"><div class="admin-panel-pro"><h3>Marca</h3><label>Nome da marca</label><input class="admin-search" value="Eterniza"><label>Slogan</label><input class="admin-search" value="Onde Cada História Vive Para Sempre!"><button class="primary-btn full" data-admin-modal="Configurações salvas|Na próxima etapa salvaremos no banco de dados.">Salvar marca</button></div><div class="admin-panel-pro"><h3>Integrações</h3><div class="settings-line"><span>YouTube API</span><b>Configurada</b></div><div class="settings-line"><span>Asaas</span><b>Pendente</b></div><div class="settings-line"><span>OpenAI/IA</span><b>Pendente</b></div><div class="settings-line"><span>Domínio</span><b>eterniza.com.br</b></div></div></div>`;
   }
   document.querySelectorAll('[data-admin-section]').forEach(b=>{ if(!b.dataset.bound){ b.dataset.bound='1'; b.onclick=()=>renderAdminSection(b.dataset.adminSection); }});
   document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{navigator.clipboard?.writeText(b.dataset.copy);showModal('Link copiado',b.dataset.copy)});
@@ -1156,117 +1156,26 @@ async function ensureCurrentTributeSaved(){
 }
 
 
-async function isMercadoPagoTestMode(){
-  try{
-    const res = await fetch(`/api/payments/config?t=${Date.now()}`, { cache: 'no-store' });
-    const data = await res.json();
-    return String(data.publicKey || '').startsWith('TEST-');
-  }catch(e){
-    return false;
-  }
-}
-
 async function choosePaymentMethod(planSlug){
   const plan = publishPaymentPlans.find(p => p.slug === planSlug) || publishPaymentPlans.find(p => p.slug === 'premium') || publishPaymentPlans[0];
-  const isTestMode = await isMercadoPagoTestMode();
   showPublishCheckoutStep(`
     <h2>⚡ Pagamento</h2>
     <p>Plano escolhido: <b>${esc(plan.name)}</b> • <b>${esc(plan.price)}</b></p>
     <div class="eterniza-pix-box">
-      <p>O PIX é a forma principal da Eterniza. Após a confirmação do Mercado Pago, sua história será publicada automaticamente.</p>
-      <div class="eterniza-method-grid" style="grid-template-columns:${isTestMode ? '1fr 1fr' : '1fr'}">
+      <p>O pagamento será gerado pelo Asaas. Após a confirmação, sua história será publicada automaticamente.</p>
+      <div class="eterniza-method-grid" style="grid-template-columns:1fr">
         <button class="eterniza-method-card" type="button" id="payWithPixOnly">
           <strong>🟢 PIX</strong>
-          <span>Gerar QR Code e copia e cola dentro da Eterniza.</span>
+          <span>Gerar QR Code e PIX copia e cola dentro da Eterniza.</span>
         </button>
-        ${isTestMode ? `
-          <button class="eterniza-method-card" type="button" id="payWithCardTestOnly">
-            <strong>💳 Cartão</strong>
-            <span>Somente para homologação Mercado Pago em modo TEST.</span>
-          </button>
-        ` : ''}
       </div>
-      ${isTestMode ? '<p style="font-size:13px;opacity:.8">Modo teste detectado: cartão liberado apenas para validação da integração.</p>' : ''}
       <button class="eterniza-pay-secondary" type="button" id="backToPlans" style="margin-top:10px;width:100%">Voltar aos planos</button>
     </div>
   `);
   const pix = document.getElementById('payWithPixOnly');
   if(pix) pix.onclick = () => createPreviewPix(plan.slug);
-  const card = document.getElementById('payWithCardTestOnly');
-  if(card) card.onclick = () => openCardPayment(plan.slug);
   const back = document.getElementById('backToPlans');
   if(back) back.onclick = openPublishCheckout;
-}
-
-function loadMercadoPagoSdk(){
-  return new Promise((resolve, reject)=>{
-    if(window.MercadoPago) return resolve();
-    const existing = document.querySelector('script[data-mp-sdk="true"]');
-    if(existing){ existing.addEventListener('load', resolve); existing.addEventListener('error', reject); return; }
-    const script = document.createElement('script');
-    script.src = 'https://sdk.mercadopago.com/js/v2';
-    script.async = true;
-    script.dataset.mpSdk = 'true';
-    script.onload = resolve;
-    script.onerror = () => reject(new Error('Não foi possível carregar o Mercado Pago.'));
-    document.head.appendChild(script);
-  });
-}
-
-async function getMercadoPagoPublicKey(){
-  const res = await fetch(`/api/payments/config?t=${Date.now()}`, { cache: 'no-store' });
-  const data = await res.json();
-  if(!res.ok || !data.ok || !data.publicKey){
-    throw new Error('MP_PUBLIC_KEY não configurada na Vercel.');
-  }
-  return data.publicKey;
-}
-
-async function openCardPayment(planSlug){
-  try{
-    const plan = publishPaymentPlans.find(p => p.slug === planSlug) || publishPaymentPlans.find(p => p.slug === 'premium') || publishPaymentPlans[0];
-
-    showPublishCheckoutStep(`
-      <div class="eterniza-pix-box">
-        <div class="eterniza-loading-orb"></div>
-        <h2>Redirecionando para o Mercado Pago...</h2>
-        <p>Vamos abrir o checkout oficial do Mercado Pago para finalizar o pagamento com cartão.</p>
-        <div class="eterniza-pay-status"><span class="eterniza-spinner"></span><span>Preparando checkout seguro...</span></div>
-      </div>
-    `);
-
-    const tribute = await ensureCurrentTributeSaved();
-
-    const res = await fetch('/api/payments/card', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tributeId: tribute.id,
-        plan: plan.slug
-      })
-    });
-
-    const data = await res.json();
-
-    if(!res.ok || !data.ok || !data.checkoutUrl){
-      throw new Error(data.message || 'Não foi possível iniciar o checkout com cartão.');
-    }
-
-    window.location.href = data.checkoutUrl;
-  }catch(error){
-    showPublishCheckoutStep(`
-      <div class="eterniza-pix-box">
-        <h2>Não foi possível abrir o cartão</h2>
-        <p>${esc(error.message || 'Tente novamente em instantes.')}</p>
-        <button class="eterniza-pay-btn" type="button" id="tryCardAgain">Tentar cartão novamente</button>
-        <button class="eterniza-pay-secondary" type="button" id="tryPixInstead" style="margin-top:10px;width:100%">Pagar com PIX</button>
-      </div>
-    `);
-    const again = document.getElementById('tryCardAgain');
-    if(again) again.onclick = () => openCardPayment(planSlug);
-    const pix = document.getElementById('tryPixInstead');
-    if(pix) pix.onclick = () => createPreviewPix(planSlug);
-  }
 }
 
 function showCardSuccess(tributeId, fallbackSlug){
