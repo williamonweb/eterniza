@@ -8,36 +8,23 @@ export async function POST(req) {
     const user = await getCurrentUser();
 
     if (!user) {
-      return NextResponse.json(
-        { ok: false, message: "Não autenticado." },
-        { status: 401 }
-      );
+      return NextResponse.json({ ok: false, message: "Não autenticado." }, { status: 401 });
     }
 
-    const body = await req.json();
-
+    const body = await req.json().catch(() => ({}));
     const tributeId = String(body.tributeId || "");
     const planSlug = String(body.plan || "premium");
 
     if (!tributeId) {
-      return NextResponse.json(
-        { ok: false, message: "Homenagem não informada." },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, message: "Homenagem não informada." }, { status: 400 });
     }
 
     const tribute = await prisma.tribute.findFirst({
-      where: {
-        id: tributeId,
-        userId: user.id,
-      },
+      where: { id: tributeId, userId: user.id },
     });
 
     if (!tribute) {
-      return NextResponse.json(
-        { ok: false, message: "Homenagem não encontrada." },
-        { status: 404 }
-      );
+      return NextResponse.json({ ok: false, message: "Homenagem não encontrada." }, { status: 404 });
     }
 
     const plan = await getPlanBySlug(planSlug);
@@ -58,17 +45,6 @@ export async function POST(req) {
       },
     });
 
-    await prisma.tribute.update({
-      where: {
-        id: tribute.id,
-      },
-      data: {
-        planId: plan.slug,
-        planName: plan.name,
-        planPriceCents: plan.priceCents,
-      },
-    });
-
     return NextResponse.json({
       ok: true,
       provider: "asaas",
@@ -80,7 +56,6 @@ export async function POST(req) {
         plan,
         qrCode:
           asaasResult.qrCode?.payload ||
-          asaasResult.qrCode?.encodedImage ||
           asaasResult.qrCode?.pixCopiaECola ||
           null,
         qrCodeBase64:
@@ -95,12 +70,8 @@ export async function POST(req) {
     });
   } catch (error) {
     console.error("Erro em POST /api/payments/create:", error);
-
     return NextResponse.json(
-      {
-        ok: false,
-        message: error.message || "Erro ao criar pagamento.",
-      },
+      { ok: false, message: error.message || "Erro ao criar pagamento." },
       { status: 500 }
     );
   }

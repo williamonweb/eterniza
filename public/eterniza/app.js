@@ -124,7 +124,7 @@ async function loadDynamicPlans(){
   }
 }
 
-const screensconst screens=['landingScreen','loginScreen','dashboardScreen','recipientScreen','planScreen','detailsScreen','previewScreen','adminScreen'];
+const screens=['landingScreen','loginScreen','dashboardScreen','recipientScreen','planScreen','detailsScreen','previewScreen','adminScreen'];
 const $=id=>document.getElementById(id);
 let state=JSON.parse(localStorage.getItem('giftBuilderState')||'{}');
 let orders=JSON.parse(localStorage.getItem('giftOrders')||'[]');
