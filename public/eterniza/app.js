@@ -1209,140 +1209,47 @@ async function getMercadoPagoPublicKey(){
 async function openCardPayment(planSlug){
   try{
     const plan = publishPaymentPlans.find(p => p.slug === planSlug) || publishPaymentPlans.find(p => p.slug === 'premium') || publishPaymentPlans[0];
+
     showPublishCheckoutStep(`
-      <div class="eterniza-card-box">
-        <div class="eterniza-back-row"><button class="eterniza-pay-secondary" type="button" id="backToMethods">← Voltar</button></div>
-        <h2>💳 Pagar com cartão</h2>
-        <p>Plano ${esc(plan.name)} • ${esc(plan.price)}. Pagamento seguro processado pelo Mercado Pago.</p>
-        <div id="eternizaPaymentBrick"></div>
-        <div class="eterniza-pay-status" id="cardPaymentStatus" style="display:none"><span class="eterniza-spinner"></span><span>Processando pagamento...</span></div>
+      <div class="eterniza-pix-box">
+        <div class="eterniza-loading-orb"></div>
+        <h2>Redirecionando para o Mercado Pago...</h2>
+        <p>Vamos abrir o checkout oficial do Mercado Pago para finalizar o pagamento com cartão.</p>
+        <div class="eterniza-pay-status"><span class="eterniza-spinner"></span><span>Preparando checkout seguro...</span></div>
       </div>
     `);
 
-    const back = document.getElementById('backToMethods');
-    if(back) back.onclick = () => choosePaymentMethod(plan.slug);
-
     const tribute = await ensureCurrentTributeSaved();
-    await loadMercadoPagoSdk();
-    const publicKey = await getMercadoPagoPublicKey();
-    const mp = new MercadoPago(publicKey, { locale: 'pt-BR' });
-    const bricksBuilder = mp.bricks();
 
-    if(window.eternizaPaymentBrickController && typeof window.eternizaPaymentBrickController.unmount === 'function'){
-      try{ await window.eternizaPaymentBrickController.unmount(); }catch(e){ console.warn('Não foi possível desmontar o Payment Brick anterior:', e); }
-      window.eternizaPaymentBrickController = null;
-    }
-    if(window.eternizaCardBrickController && typeof window.eternizaCardBrickController.unmount === 'function'){
-      try{ await window.eternizaCardBrickController.unmount(); }catch(e){}
-      window.eternizaCardBrickController = null;
-    }
-
-    const amount = Number(plan.amount || 39.9);
-
-    window.eternizaPaymentBrickController = await bricksBuilder.create('payment', 'eternizaPaymentBrick', {
-      initialization: {
-        amount,
-        payer: {
-          email: state.userEmail || ''
-        }
-      },
-      customization: {
-        visual: {
-          style: {
-            theme: 'default'
-          }
-        },
-        paymentMethods: {
-          creditCard: 'all'
-        }
-      },
-      callbacks: {
-        onReady: () => {
-          // Payment Brick carregado com sucesso.
-        },
-        onSubmit: ({ selectedPaymentMethod, formData }) => {
-          return new Promise(async (resolve, reject) => {
-            try{
-              const status = document.getElementById('cardPaymentStatus');
-              if(status) status.style.display = 'flex';
-
-              const paymentData = formData || {};
-
-              if(!paymentData.token || !paymentData.payment_method_id){
-                throw new Error('O Mercado Pago não retornou os dados do cartão. Tente novamente ou use PIX.');
-              }
-
-              const res = await fetch('/api/payments/card', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  ...paymentData,
-                  selectedPaymentMethod,
-                  tributeId: tribute.id,
-                  plan: plan.slug
-                })
-              });
-
-              const data = await res.json();
-
-              if(!res.ok || !data.ok){
-                throw new Error(data.message || 'Pagamento recusado. Confira os dados do cartão.');
-              }
-
-              const mpStatus = String(data.payment?.status || '').toLowerCase();
-
-              if(mpStatus === 'approved'){
-                showCardSuccess(tribute.id, tribute.slug || state.slug);
-              }else{
-                showPublishCheckoutStep(`
-                  <div class="eterniza-pix-box">
-                    <h2>Pagamento em análise</h2>
-                    <p>Status: ${esc(data.payment?.status || 'pending')}. Assim que for aprovado, sua história será publicada automaticamente.</p>
-                    <div class="eterniza-pay-status"><span class="eterniza-spinner"></span><span>Aguardando confirmação...</span></div>
-                  </div>
-                `);
-                startPublishStatusPolling(tribute.id, tribute.slug || state.slug);
-              }
-
-              resolve();
-            }catch(error){
-              const status = document.getElementById('cardPaymentStatus');
-              if(status) status.style.display = 'none';
-
-              showPublishCheckoutStep(`
-                <div class="eterniza-pix-box">
-                  <h2>Pagamento não aprovado</h2>
-                  <p>${esc(error.message || 'Tente novamente usando outro cartão.')}</p>
-                  <button class="eterniza-pay-btn" type="button" id="tryCardAgain">Tentar cartão novamente</button>
-                  <button class="eterniza-pay-secondary" type="button" id="tryPixInstead" style="margin-top:10px;width:100%">Pagar com PIX</button>
-                </div>
-              `);
-
-              const again = document.getElementById('tryCardAgain');
-              if(again) again.onclick = () => openCardPayment(plan.slug);
-
-              const pix = document.getElementById('tryPixInstead');
-              if(pix) pix.onclick = () => createPreviewPix(plan.slug);
-
-              reject(error);
-            }
-          });
-        },
-        onError: (error) => {
-          console.error('Erro no Payment Brick:', error);
-        }
-      }
+    const res = await fetch('/api/payments/card', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tributeId: tribute.id,
+        plan: plan.slug
+      })
     });
+
+    const data = await res.json();
+
+    if(!res.ok || !data.ok || !data.checkoutUrl){
+      throw new Error(data.message || 'Não foi possível iniciar o checkout com cartão.');
+    }
+
+    window.location.href = data.checkoutUrl;
   }catch(error){
     showPublishCheckoutStep(`
       <div class="eterniza-pix-box">
         <h2>Não foi possível abrir o cartão</h2>
         <p>${esc(error.message || 'Tente novamente em instantes.')}</p>
-        <button class="eterniza-pay-btn" type="button" id="backToCheckoutPlans">Voltar</button>
+        <button class="eterniza-pay-btn" type="button" id="tryCardAgain">Tentar cartão novamente</button>
+        <button class="eterniza-pay-secondary" type="button" id="tryPixInstead" style="margin-top:10px;width:100%">Pagar com PIX</button>
       </div>
     `);
-    const back = document.getElementById('backToCheckoutPlans');
-    if(back) back.onclick = openPublishCheckout;
+    const again = document.getElementById('tryCardAgain');
+    if(again) again.onclick = () => openCardPayment(planSlug);
+    const pix = document.getElementById('tryPixInstead');
+    if(pix) pix.onclick = () => createPreviewPix(planSlug);
   }
 }
 

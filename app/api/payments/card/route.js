@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
-import { MercadoPagoConfig, Payment } from "mercadopago";
+import { MercadoPagoConfig, Preference } from "mercadopago";
 import { prisma } from "../../../../lib/prisma";
 import { getCurrentUser } from "../../../../lib/auth";
 import { getPlanBySlug } from "../../../../lib/mercadopago";
+
+function getBaseUrl(req) {
+  const origin = req.headers.get("origin");
+  if (origin) return origin;
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "http://localhost:3000";
+}
 
 function cleanObject(obj) {
   Object.keys(obj).forEach((key) => {
@@ -15,16 +23,6 @@ function cleanObject(obj) {
     }
   });
   return obj;
-}
-
-function getPaymentErrorMessage(error) {
-  const apiMessage =
-    error?.message ||
-    error?.cause?.[0]?.description ||
-    error?.error ||
-    error?.response?.message;
-
-  return apiMessage || "Erro ao processar pagamento no cartão.";
 }
 
 export async function POST(req) {
@@ -45,20 +43,6 @@ export async function POST(req) {
     if (!tributeId) {
       return NextResponse.json(
         { ok: false, message: "Homenagem não informada." },
-        { status: 400 }
-      );
-    }
-
-    const token = body.token || body.cardToken;
-    const paymentMethodId =
-      body.payment_method_id ||
-      body.paymentMethodId ||
-      body.payment_method?.id ||
-      body.paymentMethod?.id;
-
-    if (!token || !paymentMethodId) {
-      return NextResponse.json(
-        { ok: false, message: "Dados do cartão incompletos." },
         { status: 400 }
       );
     }
@@ -87,23 +71,8 @@ export async function POST(req) {
     }
 
     const plan = getPlanBySlug(planSlug);
-    const payerFromBrick = body.payer || {};
-
-    const mercadoPagoBody = cleanObject({
-      transaction_amount: Number(plan.price),
-      token,
-      description: `Eterniza - Plano ${plan.name}`,
-      installments: Number(body.installments || 1),
-      payment_method_id: paymentMethodId,
-      issuer_id: body.issuer_id ? String(body.issuer_id) : undefined,
-      external_reference: tribute.id,
-      capture: true,
-      binary_mode: false,
-      payer: {
-        email: payerFromBrick.email || user.email,
-        identification: payerFromBrick.identification,
-      },
-    });
+    const baseUrl = getBaseUrl(req);
+    const isTestMode = String(accessToken).startsWith("TEST-");
 
     const client = new MercadoPagoConfig({
       accessToken,
@@ -112,67 +81,92 @@ export async function POST(req) {
       },
     });
 
-    const paymentClient = new Payment(client);
+    const preferenceClient = new Preference(client);
 
-    let mpPayment;
+    const preferenceBody = cleanObject({
+      external_reference: tribute.id,
+      statement_descriptor: "ETERNIZA",
+      notification_url: `${baseUrl}/api/payments/webhook`,
+      back_urls: {
+        success: `${baseUrl}/dashboard?payment=success&tribute=${encodeURIComponent(tribute.id)}`,
+        pending: `${baseUrl}/dashboard?payment=pending&tribute=${encodeURIComponent(tribute.id)}`,
+        failure: `${baseUrl}/dashboard?payment=failure&tribute=${encodeURIComponent(tribute.id)}`,
+      },
+      auto_return: "approved",
+      items: [
+        {
+          id: plan.slug,
+          title: `Eterniza - Plano ${plan.name}`,
+          description: `Publicação da homenagem Eterniza - Plano ${plan.name}`,
+          quantity: 1,
+          unit_price: Number(plan.price),
+          currency_id: "BRL",
+        },
+      ],
+      payer: {
+        email: user.email,
+        name: user.name || "Cliente Eterniza",
+      },
+      payment_methods: {
+        excluded_payment_types: [
+          { id: "ticket" },
+          { id: "atm" },
+          { id: "bank_transfer" },
+        ],
+        installments: 1,
+      },
+      metadata: {
+        tribute_id: tribute.id,
+        user_id: user.id,
+        plan: plan.slug,
+      },
+    });
+
+    let preference;
 
     try {
-      mpPayment = await paymentClient.create({
-        body: mercadoPagoBody,
+      preference = await preferenceClient.create({
+        body: preferenceBody,
         requestOptions: {
           idempotencyKey: crypto.randomUUID(),
         },
       });
     } catch (mpError) {
-      console.error("Erro Mercado Pago SDK cartão:", JSON.stringify(mpError, null, 2));
+      console.error("Erro Mercado Pago Checkout Pro:", JSON.stringify(mpError, null, 2));
       return NextResponse.json(
         {
           ok: false,
-          message: getPaymentErrorMessage(mpError),
+          message:
+            mpError?.message ||
+            mpError?.cause?.[0]?.description ||
+            "Erro ao criar checkout Mercado Pago.",
           mercadoPago: mpError,
         },
         { status: mpError?.status || 400 }
       );
     }
 
-    const paymentStatus = String(mpPayment.status || "pending").toUpperCase();
+    const checkoutUrl = isTestMode
+      ? preference.sandbox_init_point || preference.init_point
+      : preference.init_point || preference.sandbox_init_point;
 
-    await prisma.payment.create({
-      data: {
-        tributeId: tribute.id,
-        amount: plan.price,
-        status: paymentStatus,
-        mercadoPagoId: String(mpPayment.id),
-      },
-    });
-
-    if (String(mpPayment.status).toLowerCase() === "approved") {
-      await prisma.tribute.update({
-        where: { id: tribute.id },
-        data: {
-          status: "PUBLISHED",
-          planId: plan.slug,
-          planName: plan.name,
-          planPriceCents: plan.priceCents,
-          publishedAt: new Date(),
-          publicUrl: tribute.publicUrl || `/presente/${tribute.slug}`,
-        },
-      });
+    if (!checkoutUrl) {
+      return NextResponse.json(
+        { ok: false, message: "Mercado Pago não retornou o link do checkout." },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
       ok: true,
-      payment: {
-        id: mpPayment.id,
-        status: mpPayment.status,
-        statusDetail: mpPayment.status_detail,
-        plan,
-      },
+      checkoutUrl,
+      preferenceId: preference.id,
+      mode: isTestMode ? "test" : "production",
     });
   } catch (error) {
     console.error("Erro em POST /api/payments/card:", error);
     return NextResponse.json(
-      { ok: false, message: error.message || "Erro ao processar cartão." },
+      { ok: false, message: error.message || "Erro ao iniciar checkout com cartão." },
       { status: 500 }
     );
   }
