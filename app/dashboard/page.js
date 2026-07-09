@@ -12,6 +12,37 @@ function formatMoney(cents) {
   return (Number(cents || 0) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function onlyDigits(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function formatCpf(value) {
+  const digits = onlyDigits(value).slice(0, 11);
+  return digits
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+}
+
+function isValidCpf(value) {
+  const cpf = onlyDigits(value);
+  if (cpf.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
+
+  let sum = 0;
+  for (let i = 0; i < 9; i += 1) sum += Number(cpf[i]) * (10 - i);
+  let digit = 11 - (sum % 11);
+  if (digit >= 10) digit = 0;
+  if (digit !== Number(cpf[9])) return false;
+
+  sum = 0;
+  for (let i = 0; i < 10; i += 1) sum += Number(cpf[i]) * (11 - i);
+  digit = 11 - (sum % 11);
+  if (digit >= 10) digit = 0;
+
+  return digit === Number(cpf[10]);
+}
+
 export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState(null);
@@ -78,19 +109,67 @@ export default function DashboardPage() {
     window.location.replace("/login");
   }
 
-  async function createPayment(tribute, planSlug) {
+  async function createPayment(tribute, planSlug, cpfCnpj) {
+    const cpf = onlyDigits(cpfCnpj || "");
+
+    if (!cpf) {
+      try {
+        const billingRes = await fetch("/api/user/billing", { cache: "no-store" });
+        const billingData = await billingRes.json().catch(() => ({}));
+
+        if (billingData?.ok && billingData.billing?.cpf) {
+          return createPayment(tribute, planSlug, billingData.billing.cpf);
+        }
+      } catch (error) {
+        console.warn("Não foi possível buscar CPF salvo.", error);
+      }
+
+      setCheckout({
+        step: "cpf",
+        tribute,
+        planSlug,
+        cpf: "",
+        phone: user?.phone || "",
+        error: "",
+      });
+      return;
+    }
+
+    if (!isValidCpf(cpf)) {
+      setCheckout({
+        step: "cpf",
+        tribute,
+        planSlug,
+        cpf: formatCpf(cpf),
+        phone: user?.phone || "",
+        error: "Informe um CPF válido para gerar o PIX.",
+      });
+      return;
+    }
+
     setCheckout({ step: "loading", tribute, planSlug });
 
     try {
       const res = await fetch("/api/payments/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tributeId: tribute.id, plan: planSlug }),
+        body: JSON.stringify({ tributeId: tribute.id, plan: planSlug, cpfCnpj: cpf }),
       });
 
       const data = await res.json();
 
       if (!res.ok || !data.ok) {
+        if (data?.code === "CPF_REQUIRED") {
+          setCheckout({
+            step: "cpf",
+            tribute,
+            planSlug,
+            cpf: formatCpf(cpf),
+            phone: user?.phone || "",
+            error: data.message || "Informe um CPF válido para gerar o PIX.",
+          });
+          return;
+        }
         throw new Error(data.message || "Erro ao gerar pagamento.");
       }
 
@@ -295,6 +374,15 @@ function CheckoutModal({ checkout, plans, onClose, onCreatePayment }) {
           </>
         )}
 
+
+        {checkout.step === "cpf" && (
+          <CpfPaymentStep
+            checkout={checkout}
+            onClose={onClose}
+            onCreatePayment={onCreatePayment}
+          />
+        )}
+
         {checkout.step === "loading" && (
           <div className="payment-state">
             <h2>Gerando pagamento...</h2>
@@ -328,6 +416,79 @@ function CheckoutModal({ checkout, plans, onClose, onCreatePayment }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function CpfPaymentStep({ checkout, onCreatePayment }) {
+  const [cpf, setCpf] = useState(checkout.cpf || "");
+  const [phone, setPhone] = useState(checkout.phone || "");
+  const [error, setError] = useState(checkout.error || "");
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
+    const digits = onlyDigits(cpf);
+
+    if (!isValidCpf(digits)) {
+      setError("Informe um CPF válido para gerar o PIX.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/user/billing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cpf: digits, phone }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || "Não foi possível salvar o CPF.");
+      }
+
+      await onCreatePayment(checkout.tribute, checkout.planSlug, digits);
+    } catch (err) {
+      setError(err.message || "Não foi possível salvar os dados de pagamento.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="payment-state cpf-state">
+      <h2>Dados para pagamento</h2>
+      <p>Para gerar o PIX em produção, o Asaas exige o CPF do comprador.</p>
+
+      <label className="pay-label">
+        CPF obrigatório
+        <input
+          value={cpf}
+          onChange={(event) => setCpf(formatCpf(event.target.value))}
+          placeholder="000.000.000-00"
+          inputMode="numeric"
+          maxLength={14}
+        />
+      </label>
+
+      <label className="pay-label">
+        Telefone opcional
+        <input
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
+          placeholder="(51) 99999-9999"
+          inputMode="tel"
+        />
+      </label>
+
+      {error && <div className="form-error">{error}</div>}
+
+      <button className="gold full" onClick={submit} disabled={saving}>
+        {saving ? "Salvando..." : "Gerar PIX"}
+      </button>
     </div>
   );
 }
@@ -381,6 +542,7 @@ function Style() {
 .pix-img{width:280px;max-width:100%;background:#fff;border-radius:18px;padding:14px;margin:10px auto;display:block}
 textarea{width:100%;min-height:96px;border-radius:16px;border:1px solid rgba(239,189,82,.22);background:rgba(255,255,255,.08);color:#fff;padding:14px;box-sizing:border-box}
 .info-modal{width:min(480px,96vw);padding:28px;text-align:center}
+.pay-label{display:grid;gap:8px;text-align:left;color:#f6cf72;font-weight:900;margin:14px 0}.pay-label input{width:100%;box-sizing:border-box;border:1px solid rgba(239,189,82,.24);background:rgba(255,255,255,.08);color:#fff;border-radius:15px;padding:14px;font-size:16px}.form-error{border:1px solid rgba(255,90,90,.32);background:rgba(255,90,90,.09);color:#ffd0d0;border-radius:14px;padding:12px;margin:12px 0;text-align:left}.cpf-state{max-width:460px}.gold:disabled{opacity:.65;cursor:not-allowed}
 @media(max-width:850px){.client-page{padding:16px}.hero,.panel-head,.top{align-items:flex-start;flex-direction:column}.stats,.cards,.plan-grid{grid-template-columns:1fr}.hero h1{font-size:36px}}
 `}</style>
   );

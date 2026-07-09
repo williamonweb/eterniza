@@ -3,6 +3,29 @@ import { prisma } from "../../../../lib/prisma";
 import { getCurrentUser } from "../../../../lib/auth";
 import { createAsaasPixPayment, getPlanBySlug } from "../../../../lib/asaas";
 
+function onlyDigits(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function isValidCpf(value) {
+  const cpf = onlyDigits(value);
+  if (cpf.length !== 11) return false;
+  if (/^(\d){10}$/.test(cpf)) return false;
+
+  let sum = 0;
+  for (let i = 0; i < 9; i += 1) sum += Number(cpf[i]) * (10 - i);
+  let digit = 11 - (sum % 11);
+  if (digit >= 10) digit = 0;
+  if (digit !== Number(cpf[9])) return false;
+
+  sum = 0;
+  for (let i = 0; i < 10; i += 1) sum += Number(cpf[i]) * (11 - i);
+  digit = 11 - (sum % 11);
+  if (digit >= 10) digit = 0;
+
+  return digit === Number(cpf[10]);
+}
+
 export async function POST(req) {
   try {
     const user = await getCurrentUser();
@@ -14,9 +37,32 @@ export async function POST(req) {
     const body = await req.json().catch(() => ({}));
     const tributeId = String(body.tributeId || "");
     const planSlug = String(body.plan || "premium");
+    const cpfFromBody = onlyDigits(body.cpfCnpj || body.cpf || "");
 
     if (!tributeId) {
       return NextResponse.json({ ok: false, message: "Homenagem não informada." }, { status: 400 });
+    }
+
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { id: true, name: true, email: true, cpf: true },
+    });
+
+    if (!dbUser) {
+      return NextResponse.json({ ok: false, message: "Usuário não encontrado." }, { status: 404 });
+    }
+
+    const cpfCnpj = cpfFromBody || onlyDigits(dbUser.cpf || "");
+
+    if (!isValidCpf(cpfCnpj)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "CPF_REQUIRED",
+          message: "Informe um CPF válido para gerar o PIX.",
+        },
+        { status: 400 }
+      );
     }
 
     const tribute = await prisma.tribute.findFirst({
@@ -27,12 +73,20 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, message: "Homenagem não encontrada." }, { status: 404 });
     }
 
+    if (cpfCnpj && cpfCnpj !== onlyDigits(dbUser.cpf || "")) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { cpf: cpfCnpj },
+      });
+    }
+
     const plan = await getPlanBySlug(planSlug);
 
     const asaasResult = await createAsaasPixPayment({
       tributeId: tribute.id,
-      payerEmail: user.email,
-      payerName: user.name,
+      payerEmail: dbUser.email,
+      payerName: dbUser.name,
+      payerCpfCnpj: cpfCnpj,
       plan,
     });
 
