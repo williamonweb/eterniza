@@ -1237,7 +1237,8 @@ async function openCardPayment(planSlug){
       initialization: {
         amount: Number(plan.amount || 39.9),
         payer: {
-          email: state.userEmail || ''
+          email: state.userEmail || '',
+          entityType: 'individual'
         }
       },
       customization: {
