@@ -1128,7 +1128,7 @@ function openPublishCheckout(){
   `);
 
   document.querySelectorAll('[data-publish-plan]').forEach(btn => {
-    btn.onclick = () => createPreviewPix(btn.dataset.publishPlan);
+    btn.onclick = () => choosePaymentMethod(btn.dataset.publishPlan);
   });
 }
 
@@ -1156,19 +1156,44 @@ async function ensureCurrentTributeSaved(){
 }
 
 
-function choosePaymentMethod(planSlug){
+async function isMercadoPagoTestMode(){
+  try{
+    const res = await fetch(`/api/payments/config?t=${Date.now()}`, { cache: 'no-store' });
+    const data = await res.json();
+    return String(data.publicKey || '').startsWith('TEST-');
+  }catch(e){
+    return false;
+  }
+}
+
+async function choosePaymentMethod(planSlug){
   const plan = publishPaymentPlans.find(p => p.slug === planSlug) || publishPaymentPlans.find(p => p.slug === 'premium') || publishPaymentPlans[0];
+  const isTestMode = await isMercadoPagoTestMode();
   showPublishCheckoutStep(`
-    <h2>⚡ Pagamento PIX</h2>
+    <h2>⚡ Pagamento</h2>
     <p>Plano escolhido: <b>${esc(plan.name)}</b> • <b>${esc(plan.price)}</b></p>
     <div class="eterniza-pix-box">
-      <p>O pagamento será feito por PIX dentro da Eterniza. Após a confirmação do Mercado Pago, sua história será publicada automaticamente.</p>
-      <button class="eterniza-pay-btn" type="button" id="payWithPixOnly">Gerar PIX agora</button>
+      <p>O PIX é a forma principal da Eterniza. Após a confirmação do Mercado Pago, sua história será publicada automaticamente.</p>
+      <div class="eterniza-method-grid" style="grid-template-columns:${isTestMode ? '1fr 1fr' : '1fr'}">
+        <button class="eterniza-method-card" type="button" id="payWithPixOnly">
+          <strong>🟢 PIX</strong>
+          <span>Gerar QR Code e copia e cola dentro da Eterniza.</span>
+        </button>
+        ${isTestMode ? `
+          <button class="eterniza-method-card" type="button" id="payWithCardTestOnly">
+            <strong>💳 Cartão</strong>
+            <span>Somente para homologação Mercado Pago em modo TEST.</span>
+          </button>
+        ` : ''}
+      </div>
+      ${isTestMode ? '<p style="font-size:13px;opacity:.8">Modo teste detectado: cartão liberado apenas para validação da integração.</p>' : ''}
       <button class="eterniza-pay-secondary" type="button" id="backToPlans" style="margin-top:10px;width:100%">Voltar aos planos</button>
     </div>
   `);
   const pix = document.getElementById('payWithPixOnly');
   if(pix) pix.onclick = () => createPreviewPix(plan.slug);
+  const card = document.getElementById('payWithCardTestOnly');
+  if(card) card.onclick = () => openCardPayment(plan.slug);
   const back = document.getElementById('backToPlans');
   if(back) back.onclick = openPublishCheckout;
 }
