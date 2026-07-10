@@ -91,6 +91,18 @@ function formatPlanCurrencyFromCents(cents){
   return (Number(cents || 0) / 100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 }
 
+function defaultPhotosForPlan(plan){
+  const slug=String(plan?.slug || plan?.id || '').toLowerCase();
+  if(slug==='essencial') return 2;
+  if(slug==='eterno') return 20;
+  return 10;
+}
+
+function planPhotoLimit(plan){
+  const configured=Number(plan?.photos);
+  return Number.isFinite(configured) && configured>0 ? configured : defaultPhotosForPlan(plan);
+}
+
 function normalizeRemotePlan(plan){
   return {
     id: plan.slug || plan.id,
@@ -98,7 +110,7 @@ function normalizeRemotePlan(plan){
     name: plan.name,
     price: formatPlanCurrencyFromCents(plan.priceCents || plan.cents),
     cents: Number(plan.priceCents || plan.cents || 0),
-    photos: Number(plan.photos || 10),
+    photos: planPhotoLimit(plan),
     duration: plan.duration || 'vitalício',
     features: Array.isArray(plan.features) ? plan.features : [],
     desc: plan.description || plan.desc || '',
@@ -165,7 +177,112 @@ function adminLogout(){
   fetch('/api/auth/logout',{method:'POST'}).finally(()=>navigateTop('/login', true));
 }
 function showModal(t,m){$('modalTitle').textContent=t;$('modalText').textContent=m;$('modal').classList.remove('hidden')} $('modalOk').onclick=()=>$('modal').classList.add('hidden');
-function go(screen){screens.forEach(id=>$(id).classList.remove('active'));$(screen).classList.add('active');document.body.dataset.screen=screen;const m={landingScreen:['Eterniza','Onde Cada História Vive Para Sempre.',0],loginScreen:['Entrar','Acesse ou crie sua conta para começar.',10],dashboardScreen:['Meu painel','Gerencie suas homenagens Eterniza.',16],recipientScreen:['Para quem é?','O tema será escolhido automaticamente.',25],planScreen:['Escolha o plano','Defina fotos, validade e recursos.',42],detailsScreen:['Monte a página','Preencha textos, cores, fotos e música.',68],previewScreen:['Prévia profissional','Confira como o cliente verá.',88],adminScreen:['Painel Jeslie','Gestão de pedidos, clientes, status e links.',100]};$('screenTitle').textContent=m[screen][0];$('screenSubtitle').textContent=m[screen][1];$('progressBar').style.width=m[screen][2]+'%'; if(screen==='dashboardScreen') renderClientDashboard(); if(screen!=='previewScreen'&&timer) clearInterval(timer)}
+
+function normalizeCpf(value){
+  return String(value || '').replace(/\D/g,'').slice(0,11);
+}
+
+function formatCpf(value){
+  const digits=normalizeCpf(value);
+  return digits
+    .replace(/^(\d{3})(\d)/,'$1.$2')
+    .replace(/^(\d{3})\.(\d{3})(\d)/,'$1.$2.$3')
+    .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d{1,2}).*$/,'$1.$2.$3-$4');
+}
+
+function isValidCpf(value){
+  const cpf=normalizeCpf(value);
+  if(cpf.length!==11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  const calculateDigit=(length)=>{
+    let sum=0;
+    for(let i=0;i<length;i++) sum+=Number(cpf[i])*(length+1-i);
+    const rest=(sum*10)%11;
+    return rest===10?0:rest;
+  };
+  return calculateDigit(9)===Number(cpf[9]) && calculateDigit(10)===Number(cpf[10]);
+}
+
+function setAuthMode(mode='login'){
+  const create=mode==='create';
+  $('loginForm')?.classList.toggle('active',!create);
+  $('createForm')?.classList.toggle('active',create);
+  $('showLoginBtn')?.classList.toggle('active',!create);
+  $('showCreateBtn')?.classList.toggle('active',create);
+  if($('screenTitle')) $('screenTitle').textContent=create?'Criar conta':'Entrar';
+  if($('screenSubtitle')) $('screenSubtitle').textContent=create?'Cadastre seus dados para começar sua homenagem.':'Acesse ou crie sua conta para começar.';
+}
+
+async function createAccount(){
+  const button=$('createAccountBtn');
+  const name=String($('newName')?.value||'').trim();
+  const phone=String($('newWhatsapp')?.value||'').trim();
+  const cpf=normalizeCpf($('newCpf')?.value||'');
+  const email=String($('newEmail')?.value||'').trim().toLowerCase();
+  const password=String($('newPassword')?.value||'');
+
+  if(!name){
+    $('newName')?.focus();
+    return showModal('Nome obrigatório','Informe seu nome completo para continuar.');
+  }
+  if(!isValidCpf(cpf)){
+    $('newCpf')?.focus();
+    return showModal('CPF inválido','Confira o CPF informado e tente novamente.');
+  }
+  if(!email || !email.includes('@')){
+    $('newEmail')?.focus();
+    return showModal('E-mail inválido','Informe um e-mail válido para criar sua conta.');
+  }
+  if(password.length<6){
+    $('newPassword')?.focus();
+    return showModal('Senha muito curta','Crie uma senha com pelo menos 6 caracteres.');
+  }
+
+  try{
+    if(button){button.disabled=true;button.textContent='Criando conta...';}
+    const response=await fetch('/api/auth/register',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,phone,cpf,email,password})
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok || !data.ok) throw new Error(data.message || 'Não foi possível criar sua conta.');
+
+    state={
+      ...state,
+      userName:data.user?.name || name,
+      userEmail:data.user?.email || email,
+      userPhone:data.user?.phone || phone,
+      userCpf:cpf,
+      isAdmin:false
+    };
+    saveState();
+    showModal('Conta criada','Seu cadastro foi concluído. Agora vamos criar sua homenagem.');
+    const modalOk=$('modalOk');
+    if(modalOk){
+      modalOk.onclick=()=>{
+        $('modal').classList.add('hidden');
+        navigateTop('/criar',true);
+      };
+    }
+  }catch(error){
+    showModal('Não foi possível criar a conta',error.message || 'Tente novamente em instantes.');
+  }finally{
+    if(button){button.disabled=false;button.textContent='Criar conta e começar';}
+  }
+}
+function go(screen){
+  const currentScreen=document.querySelector('.screen.active')?.id || '';
+  if(currentScreen && currentScreen!==screen) stopAllMediaPlayback();
+  screens.forEach(id=>$(id).classList.remove('active'));
+  $(screen).classList.add('active');
+  document.body.dataset.screen=screen;
+  const m={landingScreen:['Eterniza','Onde Cada História Vive Para Sempre.',0],loginScreen:['Entrar','Acesse ou crie sua conta para começar.',10],dashboardScreen:['Meu painel','Gerencie suas homenagens Eterniza.',16],recipientScreen:['Para quem é?','O tema será escolhido automaticamente.',25],planScreen:['Escolha o plano','Defina fotos, validade e recursos.',42],detailsScreen:['Monte a página','Preencha textos, cores, fotos e música.',68],previewScreen:['Prévia profissional','Confira como o cliente verá.',88],adminScreen:['Painel Jeslie','Gestão de pedidos, clientes, status e links.',100]};
+  $('screenTitle').textContent=m[screen][0];
+  $('screenSubtitle').textContent=m[screen][1];
+  $('progressBar').style.width=m[screen][2]+'%';
+  if(screen==='dashboardScreen') renderClientDashboard();
+  if(screen!=='previewScreen'&&timer) clearInterval(timer);
+}
 function renderRecipients(){
   $('recipientGrid').innerHTML = recipients.map(r=>`
     <button class="option-card ${r.className}" data-recipient="${r.id}">
@@ -178,17 +295,40 @@ function renderRecipients(){
 
   document.querySelectorAll('[data-recipient]').forEach(b=>b.onclick=()=>{
     state.recipient = recipients.find(r => r.id === b.dataset.recipient);
-
-    // Plano padrão só para liberar o editor.
-    // O plano real será escolhido no pagamento.
-    state.plan = plans.find(p => p.id === 'premium');
-
+    state.plan = null;
     saveState();
-    prepareDetails();
-    go('detailsScreen');
+    renderPlans();
+    go('planScreen');
   });
 }
-function renderPlans(){$('planGrid').innerHTML=plans.map(p=>`<button class="plan-card" data-plan="${p.id}"><strong>${p.name}</strong>${p.promoActive?`<em class="promo-badge">${esc(p.promoName||'Promoção')}</em>`:''}<div class="price">${p.price}</div>${p.promoActive&&p.regularPriceCents?`<small class="old-price">de ${formatPlanCurrencyFromCents(p.regularPriceCents)}</small>`:''}<p>Online: <b>${p.duration}</b></p><ul>${(p.features||[]).map(f=>`<li>${f}</li>`).join('')}</ul></button>`).join('');document.querySelectorAll('[data-plan]').forEach(b=>b.onclick=()=>{state.plan=plans.find(p=>p.id===b.dataset.plan);saveState();prepareDetails();go('detailsScreen')})}
+
+function selectPlan(plan){
+  if(!plan) return;
+  const max=planPhotoLimit(plan);
+  const currentPhotos=Array.isArray(state.photos) ? state.photos.filter(Boolean) : [];
+  const removed=Math.max(0,currentPhotos.length-max);
+
+  state.plan={...plan,photos:max};
+  state.photos=currentPhotos.slice(0,max);
+  saveState();
+  prepareDetails();
+  go('detailsScreen');
+
+  if(removed>0){
+    setTimeout(()=>showModal(
+      'Fotos ajustadas ao plano',
+      `O plano ${plan.name} permite até ${max} foto(s). ${removed} foto(s) excedente(s) foram removidas.`
+    ),80);
+  }
+}
+
+function renderPlans(){
+  $('planGrid').innerHTML=plans.map(p=>{
+    const photoLimit=planPhotoLimit(p);
+    return `<button class="plan-card" data-plan="${p.id}"><strong>${p.name}</strong>${p.promoActive?`<em class="promo-badge">${esc(p.promoName||'Promoção')}</em>`:''}<div class="price">${p.price}</div>${p.promoActive&&p.regularPriceCents?`<small class="old-price">de ${formatPlanCurrencyFromCents(p.regularPriceCents)}</small>`:''}<p><b>${photoLimit} foto(s)</b> • Online: <b>${p.duration}</b></p><ul>${(p.features||[]).map(f=>`<li>${f}</li>`).join('')}</ul></button>`;
+  }).join('');
+  document.querySelectorAll('[data-plan]').forEach(b=>b.onclick=()=>selectPlan(plans.find(p=>p.id===b.dataset.plan)));
+}
 function renderLandingPlans(){
   const row=$('landingPlanRow');
   if(!row || !Array.isArray(plans) || !plans.length) return;
@@ -203,7 +343,8 @@ function renderLandingPlans(){
   `).join('');
 }
 function prepareDetails(){
-  const r=state.recipient||recipients[0], p=state.plan||plans[0];
+  const r=state.recipient||recipients[0], p=state.plan;
+  if(!p){ renderPlans(); go('planScreen'); return; }
   $('selectedThemeBox').innerHTML=`<strong>${r.theme}</strong><br><span>Tema automático para ${r.title}. Você ainda pode escolher as cores da página.</span>`;
   $('selectedThemeBox').className=`selected-theme ${r.className}`;
   $('primaryColor').value=state.primaryColor||'#ff4f9a';
@@ -214,12 +355,14 @@ function prepareDetails(){
   if(dateWrap){dateWrap.style.display = 'block';}
   const dateLabel=$('specialDateLabel');
   if(dateLabel){dateLabel.textContent = dateLabelForRecipient(r.id);}
-  $('photoLimit').textContent=`Seu plano ${p.name} permite até ${p.photos} foto(s). Clique em cada caixa para adicionar uma foto. Não precisa preencher todas.`;
-  state.photos = Array.isArray(state.photos) ? state.photos.slice(0,p.photos) : [];
+  const maxPhotos=planPhotoLimit(p);
+  state.plan={...p,photos:maxPhotos};
+  $('photoLimit').textContent=`Seu plano ${p.name} permite até ${maxPhotos} foto(s). Clique em cada caixa para adicionar uma foto. Não precisa preencher todas.`;
+  state.photos = Array.isArray(state.photos) ? state.photos.filter(Boolean).slice(0,maxPhotos) : [];
   saveState();
-  renderSlots(p.photos);
+  renderSlots(maxPhotos);
 }
-function renderSlots(total=(state.plan?.photos||2)){
+function renderSlots(total=planPhotoLimit(state.plan)){
   const photos=Array.isArray(state.photos)?state.photos:[];
   const slotDescriptions=['O início','O sorriso','O momento especial','A lembrança','O abraço','A viagem','A surpresa','A família','A promessa','O final feliz'];
   $('photoSlots').innerHTML=Array.from({length:total},(_,i)=>{
@@ -253,18 +396,20 @@ function filesToDataUrls(files){
   })));
 }
 $('photos').addEventListener('change',async()=>{
-  const max=state.plan?.photos||2;
+  const max=planPhotoLimit(state.plan);
   const chosen=await filesToDataUrls($('photos').files);
   if(!chosen.length) return;
   state.photos=Array.isArray(state.photos)?state.photos:[];
   let slot=Number($('photos').dataset.slot||0);
+  let added=0;
   chosen.forEach(src=>{
-    if(slot<max){ state.photos[slot]=src; slot++; }
+    if(slot<max){ state.photos[slot]=src; slot++; added++; }
   });
   state.photos=state.photos.filter(Boolean).slice(0,max);
   saveState();
   renderSlots(max);
-  if(chosen.length > max) showModal('Limite do plano',`Este plano aceita até ${max} foto(s).`);
+  const rejected=chosen.length-added;
+  if(rejected>0) showModal('Limite do plano',`O plano ${state.plan?.name||''} aceita até ${max} foto(s). ${rejected} foto(s) não foram adicionadas.`);
 });
 function youtubeId(url){if(!url)return'';const ps=[/youtube\.com\/watch\?v=([^&]+)/,/youtube\.com\/watch\?.*?&v=([^&]+)/,/youtu\.be\/([^?&]+)/,/youtube\.com\/shorts\/([^?&]+)/,/youtube\.com\/embed\/([^?&]+)/,/youtube\.com\/live\/([^?&]+)/];for(const p of ps){const m=url.trim().match(p);if(m)return m[1].replace(/[^a-zA-Z0-9_-]/g,'')}return''}
 function diff(dateValue){if(!dateValue)return null;const start=new Date(dateValue+'T00:00:00'), now=new Date(), ms=Math.max(0,now-start);return{days:Math.floor(ms/864e5),hours:Math.floor(ms/36e5),minutes:Math.floor(ms/6e4),seconds:Math.floor(ms/1e3)%60}}
@@ -329,7 +474,7 @@ function aiSuggestion(){
   $('letterText').value = recipientSpecific[r] || base[style] || base.emocionante;
   showModal('Texto criado','Criei uma sugestão mais completa. Você pode editar tudo antes de gerar a homenagem.');
 }
-async function buildPreview(){if(!state.plan||!state.recipient)return showModal('Falta informação','Escolha destinatário e plano.');state.receiverName=$('receiverName').value.trim();state.senderName=$('senderName').value.trim();state.specialDate=$('specialDate').value;state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();state.youtubeLink=$('youtubeLink').value.trim();state.letterText=$('letterText').value.trim();state.primaryColor=$('primaryColor').value;state.secondaryColor=$('secondaryColor').value;if(!state.receiverName||!state.senderName||!state.letterText)return showModal('Campos obrigatórios','Preencha quem recebe, quem envia e a carta.');const id=youtubeId(state.youtubeLink);if(state.musicMode==='youtube'&&state.youtubeLink&&!id)return showModal('Link inválido','Cole um link válido do YouTube.');state.youtubeId=state.musicMode==='youtube'?id:'';state.photos=(Array.isArray(state.photos)?state.photos:[]).filter(Boolean).slice(0,state.plan.photos);saveState();renderPreview();go('previewScreen')}
+async function buildPreview(){if(!state.recipient)return showModal('Falta informação','Escolha para quem é a homenagem.');if(!state.plan){renderPlans();go('planScreen');return showModal('Escolha o plano','Selecione um plano antes de continuar.');}state.receiverName=$('receiverName').value.trim();state.senderName=$('senderName').value.trim();state.specialDate=$('specialDate').value;state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();state.youtubeLink=$('youtubeLink').value.trim();state.letterText=$('letterText').value.trim();state.primaryColor=$('primaryColor').value;state.secondaryColor=$('secondaryColor').value;if(!state.receiverName||!state.senderName||!state.letterText)return showModal('Campos obrigatórios','Preencha quem recebe, quem envia e a carta.');const id=youtubeId(state.youtubeLink);if(state.musicMode==='youtube'&&state.youtubeLink&&!id)return showModal('Link inválido','Cole um link válido do YouTube.');state.youtubeId=state.musicMode==='youtube'?id:'';state.photos=(Array.isArray(state.photos)?state.photos:[]).filter(Boolean).slice(0,planPhotoLimit(state.plan));saveState();renderPreview();go('previewScreen')}
 function esc(txt){return String(txt||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function renderPreview(){
   if(timer) clearInterval(timer);
@@ -384,7 +529,7 @@ function renderPreview(){
         ${state.youtubeId?`<div class="music-frame-wrap" id="ytHolder"></div>`:''}
       </div>
     </section>`;
-  $('orderSummary').innerHTML=`<div class="order-line"><span>Cliente</span><strong>${esc(state.userEmail||'-')}</strong></div><div class="order-line"><span>Para</span><strong>${esc(r.title)}</strong></div><div class="order-line"><span>Tema</span><strong>${esc(r.theme)}</strong></div><div class="order-line"><span>Plano</span><strong>${esc(p.name)}</strong></div><div class="order-line"><span>Valor</span><strong>${esc(p.price)}</strong></div><div class="order-line"><span>Fotos</span><strong>${photoList.length}/${p.photos}</strong></div><div class="order-line"><span>Validade</span><strong>${esc(p.duration)}</strong></div>`;
+  $('orderSummary').innerHTML=`<div class="order-line"><span>Cliente</span><strong>${esc(state.userEmail||'-')}</strong></div><div class="order-line"><span>Para</span><strong>${esc(r.title)}</strong></div><div class="order-line"><span>Tema</span><strong>${esc(r.theme)}</strong></div><div class="order-line"><span>Plano</span><strong>${esc(p.name)}</strong></div><div class="order-line"><span>Valor</span><strong>${esc(p.price)}</strong></div><div class="order-line"><span>Fotos</span><strong>${photoList.length}/${planPhotoLimit(p)}</strong></div><div class="order-line"><span>Validade</span><strong>${esc(p.duration)}</strong></div>`;
   if(showMoments){timer=setInterval(()=>{const nc=diff(state.specialDate);const el=$('liveCounter');if(el)el.innerHTML=liveCounterHtml(nc, r.id)},1000)}
   setTimeout(initStorytelling,100);
 }
@@ -589,9 +734,13 @@ function toggleYoutubeField(){
   if($('youtubeLink')) $('youtubeLink').style.display=show?'block':'none';
   if($('youtubeLabel')) $('youtubeLabel').style.display=show?'block':'none';
   if($('youtubeSearchBox')) $('youtubeSearchBox').style.display=show?'block':'none';
-  if(!show) stopYoutubePreview();
+  if(!show){
+    stopYoutubePreview({removeFrame:true});
+    setYoutubeSearchCollapsed(false);
+  }
   state.musicMode=mode;
   updateTrackInfo();
+  if(show) setTimeout(restoreYoutubeSelection,0);
 }
 function stopAppMusic(){
   if(activeAudio){
@@ -679,11 +828,38 @@ function youtubePreviewSrc(id){
   if(location.protocol.startsWith('http')) params.set('origin',location.origin);
   return `https://www.youtube.com/embed/${id}?${params.toString()}`;
 }
-function stopYoutubePreview(){
-  if(youtubePreviewFrame) commandYoutube(youtubePreviewFrame,'pauseVideo');
+function stopYoutubePreview({removeFrame=false}={}){
+  if(youtubePreviewFrame){
+    commandYoutube(youtubePreviewFrame,'pauseVideo');
+    commandYoutube(youtubePreviewFrame,'stopVideo');
+    if(removeFrame){
+      try{youtubePreviewFrame.remove();}catch(e){}
+      youtubePreviewFrame=null;
+    }
+  }
   youtubePreviewPlaying=false;
   const btn=$('youtubePlayPauseBtn');
   if(btn){btn.textContent='▶ Play prévia'; btn.disabled=!youtubePreviewLoadedId; btn.classList.remove('playing');}
+}
+function stopInternalTrackPreview(){
+  if(previewAudio){
+    try{previewAudio.pause(); previewAudio.currentTime=0;}catch(e){}
+  }
+  previewAudio=null;
+  previewTrackId=null;
+  previewPaused=false;
+  resetPreviewButton();
+}
+function stopAllMediaPlayback(){
+  stopInternalTrackPreview();
+  stopYoutubePreview({removeFrame:true});
+  stopAppMusic();
+  const storyFrame=$('ytFrame');
+  if(storyFrame){
+    commandYoutube(storyFrame,'pauseVideo');
+    commandYoutube(storyFrame,'stopVideo');
+    try{storyFrame.remove();}catch(e){}
+  }
 }
 function formatDuration(seconds){
   if(!seconds) return '';
@@ -719,18 +895,117 @@ function renderYoutubeResults(items){
     if(item) selectYoutubeResult(item);
   });
 }
+function showMusicToast(message='Música selecionada com sucesso!'){
+  let toast=document.getElementById('eternizaMusicToast');
+  if(!toast){
+    toast=document.createElement('div');
+    toast.id='eternizaMusicToast';
+    toast.className='eterniza-music-toast';
+    document.body.appendChild(toast);
+  }
+  toast.innerHTML=`<span>✓</span><strong>${esc(message)}</strong>`;
+  toast.classList.add('show');
+  clearTimeout(showMusicToast.timer);
+  showMusicToast.timer=setTimeout(()=>toast.classList.remove('show'),2200);
+}
+function setYoutubeSearchCollapsed(collapsed){
+  const box=$('youtubeSearchBox');
+  if(!box) return;
+  box.classList.toggle('youtube-search-collapsed',!!collapsed);
+  ['youtubeSearchResults','youtubePreviewHolder'].forEach(id=>{
+    const el=$(id); if(el) el.style.display=collapsed?'none':'';
+  });
+  const row=box.querySelector('.youtube-search-row');
+  const head=box.querySelector('.youtube-search-head');
+  const actions=box.querySelector('.youtube-preview-actions');
+  if(row) row.style.display=collapsed?'none':'';
+  if(head) head.style.display=collapsed?'none':'';
+  // Mantém o botão de prévia visível depois que a música é selecionada.
+  if(actions) actions.style.display='';
+}
+function renderSelectedYoutubeCard(item){
+  const selected=$('youtubeSelectedBox');
+  if(!selected) return;
+  selected.classList.remove('hidden');
+  selected.innerHTML=`
+    <img src="${esc(item.thumb||`https://img.youtube.com/vi/${item.id}/hqdefault.jpg`)}" alt="Capa da música ${esc(item.title||'selecionada')}">
+    <div class="youtube-selected-copy">
+      <small>✓ Música selecionada</small>
+      <strong>${esc(item.title||'Música do YouTube')}</strong>
+      <span>${esc(item.channel||'YouTube')}</span>
+    </div>
+    <div class="youtube-selected-actions">
+      <button type="button" class="ghost-btn small" id="changeYoutubeMusicBtn">Trocar música</button>
+      <button type="button" class="ghost-btn small danger" id="removeYoutubeMusicBtn">Remover</button>
+    </div>`;
+  const change=$('changeYoutubeMusicBtn');
+  if(change) change.onclick=()=>{
+    stopYoutubePreview({removeFrame:true});
+    setYoutubeSearchCollapsed(false);
+    const search=$('youtubeSearch');
+    if(search){search.value=''; setTimeout(()=>search.focus(),80);}
+    const results=$('youtubeSearchResults');
+    if(results) results.innerHTML='';
+  };
+  const remove=$('removeYoutubeMusicBtn');
+  if(remove) remove.onclick=removeYoutubeSelection;
+}
+function removeYoutubeSelection(){
+  stopYoutubePreview({removeFrame:true});
+  selectedYoutubeResult=null;
+  youtubePreviewLoadedId='';
+  state.youtubeId='';
+  state.youtubeLink='';
+  state.youtubeSelection=null;
+  if($('youtubeLink')) $('youtubeLink').value='';
+  const selected=$('youtubeSelectedBox');
+  if(selected){selected.classList.add('hidden'); selected.innerHTML='';}
+  setYoutubeSearchCollapsed(false);
+  saveState();
+  showMusicToast('Música removida.');
+  setTimeout(()=>$('youtubeSearch')?.focus(),80);
+}
+function restoreYoutubeSelection(){
+  const item=state.youtubeSelection || (state.youtubeId ? {
+    id:state.youtubeId,
+    title:'Música selecionada',
+    channel:'YouTube',
+    thumb:`https://img.youtube.com/vi/${state.youtubeId}/hqdefault.jpg`
+  } : null);
+  if(!item) return;
+  selectedYoutubeResult=item;
+  renderSelectedYoutubeCard(item);
+  setYoutubeSearchCollapsed(true);
+  youtubePreviewLoadedId=item.id;
+}
 function selectYoutubeResult(item){
+  if(!item?.id) return;
+  stopAllMediaPlayback();
   selectedYoutubeResult=item;
   state.youtubeId=item.id;
   state.youtubeLink=`https://www.youtube.com/watch?v=${item.id}`;
+  state.youtubeSelection={
+    id:item.id,
+    title:item.title||'Música do YouTube',
+    channel:item.channel||'YouTube',
+    thumb:item.thumb||`https://img.youtube.com/vi/${item.id}/hqdefault.jpg`
+  };
   if($('youtubeLink')) $('youtubeLink').value=state.youtubeLink;
-  const selected=$('youtubeSelectedBox');
-  if(selected){
-    selected.classList.remove('hidden');
-    selected.innerHTML=`<img src="${esc(item.thumb)}" alt=""><div><strong>${esc(item.title)}</strong><span>${esc(item.channel)}</span><small>Música selecionada para a homenagem</small></div>`;
+  renderSelectedYoutubeCard(state.youtubeSelection);
+  youtubePreviewLoadedId=item.id;
+  const previewButton=$('youtubePlayPauseBtn');
+  if(previewButton){
+    previewButton.disabled=false;
+    previewButton.textContent='▶ Tocar prévia';
+    previewButton.classList.remove('playing');
   }
-  loadYoutubePreview(item.id);
   saveState();
+  const chosen=document.querySelector(`[data-ytid="${CSS.escape(item.id)}"]`);
+  if(chosen){chosen.classList.add('youtube-result-selected'); const label=chosen.querySelector('em'); if(label) label.textContent='✓ Selecionada';}
+  setTimeout(()=>{
+    setYoutubeSearchCollapsed(true);
+    showMusicToast('Música selecionada com sucesso!');
+  },220);
 }
 async function searchYoutube(){
   const q=($('youtubeSearch')?.value||'').trim();
@@ -794,12 +1069,16 @@ async function searchYoutube(){
   if(!items.length) items=youtubeDemoCatalog.slice(0,8);
   renderYoutubeResults(items);
 }
-function loadYoutubePreview(idOverride){
+function loadYoutubePreview(idOverride, { autoplay = false } = {}){
   const id=idOverride || state.youtubeId || youtubePreviewLoadedId || youtubeId(($('youtubeLink')?.value||'').trim());
-  if(!id) return showModal('YouTube','Escolha uma música na lista para carregar a prévia.');
+  if(!id){
+    showModal('YouTube','Escolha uma música na lista para carregar a prévia.');
+    return null;
+  }
   const holder=$('youtubePreviewHolder');
-  if(!holder) return;
-  stopYoutubePreview();
+  if(!holder) return null;
+
+  stopYoutubePreview({removeFrame:true});
   youtubePreviewLoadedId=id;
   youtubePreviewFrame=document.createElement('iframe');
   youtubePreviewFrame.title='Prévia de áudio do YouTube';
@@ -807,39 +1086,100 @@ function loadYoutubePreview(idOverride){
   youtubePreviewFrame.src=youtubePreviewSrc(id);
   youtubePreviewFrame.setAttribute('allow','autoplay; encrypted-media; picture-in-picture');
   youtubePreviewFrame.setAttribute('allowfullscreen','');
+  youtubePreviewFrame.dataset.ready='false';
+
   holder.innerHTML='';
   holder.appendChild(youtubePreviewFrame);
+
   const note=document.createElement('div');
   note.className='youtube-preview-note audio-only';
-  note.innerHTML='Prévia em modo áudio. O vídeo fica oculto na Eterniza. Se não tocar, abra o projeto pelo arquivo <strong>iniciar-eterniza.bat</strong> ou escolha outra versão da música.';
+  note.innerHTML='Prévia em modo áudio. O vídeo fica oculto na Eterniza. Se uma versão bloquear a reprodução, escolha outra música.';
   holder.appendChild(note);
+
   const btn=$('youtubePlayPauseBtn');
-  if(btn){btn.disabled=false; btn.textContent='▶ Play prévia'; btn.classList.remove('playing');}
-}
-function toggleYoutubePreview(){
-  if(!youtubePreviewFrame){ loadYoutubePreview(); }
-  if(!youtubePreviewFrame) return;
-  const btn=$('youtubePlayPauseBtn');
-  if(location.protocol === 'file:'){
-    showModal('Prévia do YouTube','O YouTube costuma bloquear player quando o HTML é aberto direto pelo arquivo. Abra pelo <strong>iniciar-eterniza.bat</strong> para rodar em localhost e testar a prévia sem mostrar vídeo.');
+  if(btn){
+    btn.disabled=false;
+    btn.textContent=autoplay?'Carregando prévia...':'▶ Tocar prévia';
+    btn.classList.remove('playing');
   }
-  if(youtubePreviewPlaying){
+
+  youtubePreviewFrame.onload=()=>{
+    if(!youtubePreviewFrame) return;
+    youtubePreviewFrame.dataset.ready='true';
+    if(autoplay) playYoutubePreview();
+    else if(btn) btn.textContent='▶ Tocar prévia';
+  };
+
+  return youtubePreviewFrame;
+}
+
+function playYoutubePreview(){
+  const frame=youtubePreviewFrame;
+  const btn=$('youtubePlayPauseBtn');
+  if(!frame) return;
+
+  const sendPlayCommands=()=>{
+    if(!youtubePreviewFrame || youtubePreviewFrame!==frame) return;
+    commandYoutube(frame,'unMute');
+    commandYoutube(frame,'setVolume',[100]);
+    commandYoutube(frame,'playVideo');
+  };
+
+  sendPlayCommands();
+  setTimeout(sendPlayCommands,250);
+  setTimeout(sendPlayCommands,700);
+
+  youtubePreviewPlaying=true;
+  if(btn){
+    btn.disabled=false;
+    btn.textContent='⏸ Pausar prévia';
+    btn.classList.add('playing');
+  }
+}
+
+function toggleYoutubePreview(){
+  const btn=$('youtubePlayPauseBtn');
+
+  if(youtubePreviewPlaying && youtubePreviewFrame){
     commandYoutube(youtubePreviewFrame,'pauseVideo');
     youtubePreviewPlaying=false;
-    if(btn){btn.textContent='▶ Play prévia'; btn.classList.remove('playing');}
+    if(btn){btn.textContent='▶ Tocar prévia'; btn.classList.remove('playing');}
     return;
   }
-  commandYoutube(youtubePreviewFrame,'unMute');
-  commandYoutube(youtubePreviewFrame,'setVolume',[100]);
-  commandYoutube(youtubePreviewFrame,'playVideo');
-  youtubePreviewPlaying=true;
-  if(btn){btn.textContent='⏸ Pausar prévia'; btn.classList.add('playing');}
+
+  if(!youtubePreviewFrame){
+    loadYoutubePreview(null,{autoplay:true});
+    return;
+  }
+
+  if(youtubePreviewFrame.dataset.ready==='true'){
+    playYoutubePreview();
+    return;
+  }
+
+  if(btn){
+    btn.disabled=true;
+    btn.textContent='Carregando prévia...';
+  }
+  youtubePreviewFrame.onload=()=>{
+    if(!youtubePreviewFrame) return;
+    youtubePreviewFrame.dataset.ready='true';
+    playYoutubePreview();
+  };
 }
 function setupAuthAndYoutubeHelpers(){
   ['email','newEmail'].forEach(id=>{
     const el=$(id);
     if(el) el.addEventListener('input',()=>{ const pos=el.selectionStart; el.value=el.value.toLowerCase(); try{el.setSelectionRange(pos,pos)}catch(e){}; });
   });
+  const cpfInput=$('newCpf');
+  if(cpfInput){
+    cpfInput.addEventListener('input',()=>{cpfInput.value=formatCpf(cpfInput.value);});
+    cpfInput.addEventListener('blur',()=>{
+      if(cpfInput.value && !isValidCpf(cpfInput.value)) cpfInput.setAttribute('aria-invalid','true');
+      else cpfInput.removeAttribute('aria-invalid');
+    });
+  }
   const pass=$('password');
   if(pass) pass.addEventListener('keydown',e=>{ if(e.key==='Enter') $('loginBtn')?.click(); });
   const newPass=$('newPassword');
@@ -1234,6 +1574,7 @@ const publishPaymentPlans = [
 ];
 
 let publishPollTimer = null;
+let pixCreationInFlight = false;
 
 function checkoutStyle(){
   return `
@@ -1426,7 +1767,15 @@ async function getSavedBilling(){
   try{
     const res=await fetch('/api/user/billing',{cache:'no-store'});
     const data=await res.json().catch(()=>({}));
-    if(res.ok && data.ok) return data.billing||null;
+    if(res.ok && data.ok){
+      const billing=data.billing||null;
+      if(billing){
+        state.userCpf=onlyCpfDigits(billing.cpf||'');
+        state.userPhone=billing.phone||state.userPhone||'';
+        localStorage.setItem('giftBuilderState',JSON.stringify(state));
+      }
+      return billing;
+    }
   }catch(error){
     console.warn('Não foi possível consultar os dados de cobrança.',error);
   }
@@ -1477,6 +1826,9 @@ function requestCpfBeforePix(planSlug,billing={}){
         });
         const data=await res.json().catch(()=>({}));
         if(!res.ok || !data.ok) throw new Error(data.message||'Não foi possível salvar o CPF.');
+        state.userCpf=cpf;
+        if(data.billing?.phone) state.userPhone=data.billing.phone;
+        localStorage.setItem('giftBuilderState',JSON.stringify(state));
         createPreviewPix(planSlug,cpf,true);
       }catch(err){
         if(error) error.textContent=err.message||'Não foi possível salvar os dados.';
@@ -1491,6 +1843,9 @@ function requestCpfBeforePix(planSlug,billing={}){
 }
 
 async function createPreviewPix(planSlug,cpfCnpj='',billingAlreadyChecked=false){
+  if(pixCreationInFlight) return;
+  pixCreationInFlight=true;
+
   try{
     let cpf=onlyCpfDigits(cpfCnpj);
 
@@ -1524,15 +1879,15 @@ async function createPreviewPix(planSlug,cpfCnpj='',billingAlreadyChecked=false)
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         tributeId: tribute.id,
-        plan: planSlug || 'premium',
-        cpfCnpj: cpf
+        plan: planSlug || 'premium'
       })
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(()=>({}));
     if(!res.ok || !data.ok){
       if(data?.code==='CPF_REQUIRED'){
-        requestCpfBeforePix(planSlug,{cpf});
+        const billing=await getSavedBilling();
+        requestCpfBeforePix(planSlug,billing||{cpf});
         return;
       }
       throw new Error(data.message || 'Erro ao gerar pagamento PIX.');
@@ -1571,6 +1926,8 @@ async function createPreviewPix(planSlug,cpfCnpj='',billingAlreadyChecked=false)
     `);
     const again = document.getElementById('tryPixAgain');
     if(again) again.onclick = openPublishCheckout;
+  }finally{
+    pixCreationInFlight=false;
   }
 }
 
@@ -1633,6 +1990,19 @@ function startPublishStatusPolling(tributeId, fallbackSlug){
     .admin-textarea{min-height:92px;resize:vertical}
     .promo-editor{border:1px solid rgba(239,189,82,.16);background:rgba(0,0,0,.16);border-radius:16px;padding:12px;display:grid;gap:10px}
     .promo-toggle{display:flex!important;grid-template-columns:auto 1fr;align-items:center;gap:8px}
+    .youtube-selected-box{align-items:center;gap:14px;flex-wrap:wrap}
+    .youtube-selected-box img{width:82px;height:62px;object-fit:cover;border-radius:12px}
+    .youtube-selected-copy{display:grid;gap:3px;min-width:180px;flex:1}
+    .youtube-selected-copy small{color:#77d9a0;font-weight:900}
+    .youtube-selected-copy strong{color:#fff;font-size:16px}
+    .youtube-selected-copy span{color:#d8c8ab;font-size:13px}
+    .youtube-selected-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .ghost-btn.danger{border-color:rgba(255,90,90,.35);color:#ffb0b0}
+    .youtube-result-selected{border-color:#77d9a0!important;box-shadow:0 0 0 3px rgba(119,217,160,.13)!important}
+    .eterniza-music-toast{position:fixed;right:22px;bottom:22px;z-index:99999;display:flex;align-items:center;gap:10px;padding:14px 18px;border-radius:14px;background:#10251a;color:#eafff0;border:1px solid rgba(119,217,160,.45);box-shadow:0 18px 55px rgba(0,0,0,.45);opacity:0;transform:translateY(18px);pointer-events:none;transition:.25s ease}
+    .eterniza-music-toast.show{opacity:1;transform:translateY(0)}
+    .eterniza-music-toast span{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#77d9a0;color:#082012;font-weight:1000}
+    @media(max-width:600px){.youtube-selected-actions{width:100%}.youtube-selected-actions button{flex:1}.eterniza-music-toast{left:16px;right:16px;bottom:16px}}
   `;
   document.head.appendChild(style);
 })();
@@ -1643,5 +2013,10 @@ if($('demoOpenBtn')) { $('demoOpenBtn').setAttribute('href','/presente/demo-mari
 $('showLoginBtn').onclick=()=>setAuthMode('login');
 $('showCreateBtn').onclick=()=>setAuthMode('create');
 $('loginBtn').onclick=()=>navigateTop('/login',true);
-$('createAccountBtn').onclick=()=>navigateTop('/cadastro',true);if($('logoutBtn')) $('logoutBtn').onclick=adminLogout;$('previewBtn').onclick=()=>{document.body.dataset.publicGift='false';buildPreview();};$('editBtn').onclick=()=>go('detailsScreen');$('publishBtn').textContent='❤️ Publicar minha história';$('publishBtn').onclick=openPublishCheckout;if($('newGiftBtn')) $('newGiftBtn').onclick=()=>go('recipientScreen'); if($('dashboardNewGiftBtn')) $('dashboardNewGiftBtn').onclick=()=>go('recipientScreen');$('backDetailsBtn').onclick=()=>go('recipientScreen');$('aiTextBtn').onclick=aiSuggestion;$('musicMode').onchange=()=>{state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();saveState();toggleYoutubeField();};document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{activeFilter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('active-filter'));b.classList.add('active-filter');renderOrders()});
-setupAuthAndYoutubeHelpers();renderRecipients();renderPlans();loadDynamicPlans();if(state.userEmail)$('email').value=state.userEmail;window.addEventListener('hashchange',openRoute);if(!openRoute())go('landingScreen');
+$('createAccountBtn').onclick=createAccount;if($('logoutBtn')) $('logoutBtn').onclick=adminLogout;$('previewBtn').onclick=()=>{document.body.dataset.publicGift='false';buildPreview();};$('editBtn').onclick=()=>go('detailsScreen');$('publishBtn').textContent='❤️ Publicar minha história';$('publishBtn').onclick=openPublishCheckout;if($('newGiftBtn')) $('newGiftBtn').onclick=()=>go('recipientScreen'); if($('dashboardNewGiftBtn')) $('dashboardNewGiftBtn').onclick=()=>go('recipientScreen');$('backDetailsBtn').onclick=()=>go('recipientScreen');$('aiTextBtn').onclick=aiSuggestion;$('musicMode').onchange=()=>{stopAllMediaPlayback();state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();saveState();toggleYoutubeField();};document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{activeFilter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('active-filter'));b.classList.add('active-filter');renderOrders()});
+setupAuthAndYoutubeHelpers();renderRecipients();renderPlans();loadDynamicPlans();if(state.userEmail)$('email').value=state.userEmail;
+window.addEventListener('hashchange',()=>{stopAllMediaPlayback();openRoute();});
+window.addEventListener('pagehide',stopAllMediaPlayback);
+window.addEventListener('beforeunload',stopAllMediaPlayback);
+document.addEventListener('visibilitychange',()=>{if(document.hidden) stopAllMediaPlayback();});
+if(!openRoute())go('landingScreen');

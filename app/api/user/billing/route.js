@@ -42,7 +42,7 @@ export async function GET() {
         email: dbUser?.email || user.email || "",
         phone: dbUser?.phone || "",
         cpf: dbUser?.cpf || "",
-        hasCpf: !!dbUser?.cpf,
+        hasCpf: isValidCpf(dbUser?.cpf || ""),
       },
     });
   } catch (error) {
@@ -61,6 +61,21 @@ export async function POST(req) {
 
     if (!isValidCpf(cpf)) {
       return NextResponse.json({ ok: false, message: "CPF inválido." }, { status: 400 });
+    }
+
+    const existingCpf = await prisma.user.findFirst({
+      where: {
+        cpf,
+        NOT: { id: user.id },
+      },
+      select: { id: true },
+    });
+
+    if (existingCpf) {
+      return NextResponse.json(
+        { ok: false, message: "Este CPF já está vinculado a outra conta." },
+        { status: 409 }
+      );
     }
 
     const updated = await prisma.user.update({

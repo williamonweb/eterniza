@@ -3,7 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Eterniza</title>
+  <title>Eterniza | Onde Cada História Vive Para Sempre</title>
+  <meta name="description" content="Transforme fotos, música e palavras em uma homenagem emocionante e compartilhe um momento inesquecível com quem você ama." />
+  <meta name="theme-color" content="#050706" />
+  <meta property="og:title" content="Eterniza | Onde Cada História Vive Para Sempre" />
+  <meta property="og:description" content="Transforme fotos, música e palavras em uma homenagem emocionante." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://eternizas.com.br" />
+  <meta property="og:image" content="https://eternizas.com.br/eterniza/assets/brand/hero-couple.jpg" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -146,11 +154,14 @@
             <label>Nome completo</label>
             <input id="newName" placeholder="Seu nome" />
             <label>WhatsApp</label>
-            <input id="newWhatsapp" placeholder="(51) 99999-9999" />
+            <input id="newWhatsapp" placeholder="(51) 99999-9999" inputmode="tel" autocomplete="tel" />
+            <label>CPF</label>
+            <input id="newCpf" type="text" placeholder="000.000.000-00" inputmode="numeric" autocomplete="off" maxlength="14" aria-describedby="newCpfHint" />
+            <small id="newCpfHint" class="hint">O CPF é necessário para gerar o pagamento com segurança.</small>
             <label>E-mail</label>
             <input id="newEmail" type="email" placeholder="cliente@email.com" autocapitalize="none" autocomplete="email" inputmode="email" spellcheck="false" />
             <label>Senha</label>
-            <input id="newPassword" type="password" placeholder="mínimo 4 caracteres" autocomplete="new-password" />
+            <input id="newPassword" type="password" placeholder="mínimo 6 caracteres" autocomplete="new-password" />
             <button id="createAccountBtn" class="primary-btn full">Criar conta e começar</button>
           </div>
           <p class="hint">Protótipo local: usuários e pedidos ficam salvos apenas neste navegador.</p>

@@ -1,6 +1,49 @@
 export const metadata = {
-  title: 'Eterniza',
-  description: 'Onde Cada História Vive Para Sempre!'
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://eternizas.com.br'),
+  title: {
+    default: 'Eterniza | Onde Cada História Vive Para Sempre',
+    template: '%s | Eterniza'
+  },
+  description: 'Transforme fotos, música e palavras em uma homenagem emocionante e compartilhe um momento inesquecível com quem você ama.',
+  applicationName: 'Eterniza',
+  authors: [{ name: 'Eterniza' }],
+  creator: 'Eterniza',
+  publisher: 'Eterniza',
+  keywords: ['homenagem online', 'presente digital', 'memórias', 'QR Code', 'homenagem personalizada', 'Eterniza'],
+  alternates: { canonical: '/' },
+  icons: {
+    icon: '/favicon.ico',
+    shortcut: '/favicon.ico',
+    apple: '/favicon.ico'
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'pt_BR',
+    url: '/',
+    siteName: 'Eterniza',
+    title: 'Eterniza | Onde Cada História Vive Para Sempre',
+    description: 'Transforme fotos, música e palavras em uma homenagem emocionante e compartilhe um momento inesquecível com quem você ama.',
+    images: [{
+      url: '/eterniza/assets/brand/hero-couple.jpg',
+      width: 1200,
+      height: 630,
+      alt: 'Eterniza — homenagens que vivem para sempre'
+    }]
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Eterniza | Onde Cada História Vive Para Sempre',
+    description: 'Transforme fotos, música e palavras em uma homenagem emocionante.',
+    images: ['/eterniza/assets/brand/hero-couple.jpg']
+  },
+  robots: { index: true, follow: true },
+  other: { 'theme-color': '#050706' }
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#050706'
 };
 
 export default function RootLayout({ children }) {

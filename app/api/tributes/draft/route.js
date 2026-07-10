@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/prisma";
 import { makeSlug } from "../../../../lib/slug";
+import { getPlanBySlug } from "../../../../lib/asaas";
 
 function normalizeDate(value) {
   if (!value) return null;
@@ -52,7 +53,37 @@ export async function POST(req) {
     const sender = String(content.senderName || body.senderName || "").trim();
     const title = receiver || "Homenagem sem título";
     const category = content.recipient?.id || body.category || null;
-    const plan = content.plan || {};
+    const requestedPlan = content.plan || {};
+    const planSlug = String(requestedPlan.slug || requestedPlan.id || '').trim().toLowerCase();
+    const plan = planSlug ? await getPlanBySlug(planSlug) : null;
+    const photos = Array.isArray(content.photos) ? content.photos.filter(Boolean) : [];
+
+    if (!plan) {
+      return NextResponse.json({ ok: false, message: "Escolha um plano válido antes de salvar a homenagem." }, { status: 400 });
+    }
+
+    const photoLimit = Number(plan.photos || 0);
+    if (!photoLimit || photos.length > photoLimit) {
+      return NextResponse.json(
+        { ok: false, message: `O plano ${plan.name} permite até ${photoLimit} foto(s).` },
+        { status: 400 }
+      );
+    }
+
+    const normalizedContent = {
+      ...content,
+      plan: {
+        ...requestedPlan,
+        id: plan.slug || requestedPlan.id,
+        slug: plan.slug || requestedPlan.slug || requestedPlan.id,
+        name: plan.name,
+        cents: Math.round(Number(plan.price || 0) * 100),
+        photos: photoLimit,
+        duration: plan.duration || requestedPlan.duration,
+      },
+      photos,
+    };
+
     const music = {
       mode: content.musicMode || null,
       selectedTrack: content.selectedTrack || null,
@@ -66,11 +97,11 @@ export async function POST(req) {
       receiverName: receiver || null,
       senderName: sender || null,
       specialDate: normalizeDate(content.specialDate),
-      planId: plan.id || null,
+      planId: plan.slug || requestedPlan.id || null,
       planName: plan.name || null,
-      planPriceCents: Number(plan.cents || 0),
+      planPriceCents: Math.round(Number(plan.price || 0) * 100),
       music,
-      content,
+      content: normalizedContent,
     };
 
     let tribute = null;

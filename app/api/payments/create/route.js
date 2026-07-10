@@ -52,7 +52,7 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, message: "Usuário não encontrado." }, { status: 404 });
     }
 
-    const cpfCnpj = cpfFromBody || onlyDigits(dbUser.cpf || "");
+    const cpfCnpj = onlyDigits(dbUser.cpf || "") || cpfFromBody;
 
     if (!isValidCpf(cpfCnpj)) {
       return NextResponse.json(
@@ -81,6 +81,20 @@ export async function POST(req) {
     }
 
     const plan = await getPlanBySlug(planSlug);
+    const tributeContent = tribute.content && typeof tribute.content === 'object' ? tribute.content : {};
+    const tributePhotos = Array.isArray(tributeContent.photos) ? tributeContent.photos.filter(Boolean) : [];
+    const photoLimit = Number(plan.photos || 0);
+
+    if (!photoLimit || tributePhotos.length > photoLimit) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: 'PHOTO_LIMIT_EXCEEDED',
+          message: `O plano ${plan.name} permite até ${photoLimit} foto(s). Remova as fotos excedentes antes de gerar o PIX.`,
+        },
+        { status: 400 }
+      );
+    }
 
     const asaasResult = await createAsaasPixPayment({
       tributeId: tribute.id,
