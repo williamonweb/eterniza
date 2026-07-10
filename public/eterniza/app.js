@@ -82,9 +82,9 @@ function previewSelectedTrack(btn){
 }
 
 let plans = [
-  {id:'basico', name:'Básico', price:'R$ 19,90', cents:1990, photos:2, duration:'1 mês', features:['2 fotos','Música por YouTube','Carta personalizada']},
-  {id:'top', name:'Top', price:'R$ 28,90', cents:2890, photos:5, duration:'5 meses', features:['5 fotos','Música de fundo','Carta personalizada','Contador para casais']},
-  {id:'premium', name:'Premium', price:'R$ 39,90', cents:3990, photos:10, duration:'vitalício', features:['10 fotos','Música de fundo','Carta personalizada','Contador para casais','Data especial para casais']}
+  {id:'essencial', slug:'essencial', name:'Essencial', price:'R$ 19,90', cents:1990, photos:2, duration:'1 mês', features:['2 fotos','Música por YouTube','Carta personalizada'], desc:'Para uma homenagem simples e emocionante.'},
+  {id:'premium', slug:'premium', name:'Premium', price:'R$ 39,90', cents:3990, photos:10, duration:'vitalício', features:['10 fotos','Música de fundo','Carta personalizada','Contador para casais','Data especial para casais'], desc:'O mais escolhido. História completa com QR Code.'},
+  {id:'eterno', slug:'eterno', name:'Eterno', price:'R$ 69,90', cents:6990, photos:20, duration:'vitalício', features:['20 fotos','Música de fundo','Carta personalizada','QR Code','Página vitalícia'], desc:'Experiência completa para eternizar para sempre.'}
 ];
 
 function formatPlanCurrencyFromCents(cents){
@@ -119,6 +119,7 @@ async function loadDynamicPlans(){
       if(updated) state.plan = updated;
     }
     renderPlans();
+    renderLandingPlans();
   }catch(error){
     console.warn('Não foi possível carregar planos dinâmicos.', error);
   }
@@ -188,6 +189,19 @@ function renderRecipients(){
   });
 }
 function renderPlans(){$('planGrid').innerHTML=plans.map(p=>`<button class="plan-card" data-plan="${p.id}"><strong>${p.name}</strong>${p.promoActive?`<em class="promo-badge">${esc(p.promoName||'Promoção')}</em>`:''}<div class="price">${p.price}</div>${p.promoActive&&p.regularPriceCents?`<small class="old-price">de ${formatPlanCurrencyFromCents(p.regularPriceCents)}</small>`:''}<p>Online: <b>${p.duration}</b></p><ul>${(p.features||[]).map(f=>`<li>${f}</li>`).join('')}</ul></button>`).join('');document.querySelectorAll('[data-plan]').forEach(b=>b.onclick=()=>{state.plan=plans.find(p=>p.id===b.dataset.plan);saveState();prepareDetails();go('detailsScreen')})}
+function renderLandingPlans(){
+  const row=$('landingPlanRow');
+  if(!row || !Array.isArray(plans) || !plans.length) return;
+  row.innerHTML=plans.map((plan,index)=>`
+    <article class="${plan.id==='premium'?'featured':''}">
+      <strong>${esc(plan.name)}</strong>
+      ${plan.promoActive?`<em class="promo-badge">${esc(plan.promoName||'Promoção')}</em>`:''}
+      <b>${esc(plan.price)}</b>
+      ${plan.promoActive&&plan.regularPriceCents?`<small class="old-price">de ${formatPlanCurrencyFromCents(plan.regularPriceCents)}</small>`:''}
+      <p>${esc(plan.desc || `${plan.photos} fotos • ${plan.duration}`)}</p>
+    </article>
+  `).join('');
+}
 function prepareDetails(){
   const r=state.recipient||recipients[0], p=state.plan||plans[0];
   $('selectedThemeBox').innerHTML=`<strong>${r.theme}</strong><br><span>Tema automático para ${r.title}. Você ainda pode escolher as cores da página.</span>`;
@@ -1240,7 +1254,7 @@ function checkoutStyle(){
       .eterniza-pay-secondary{border:1px solid rgba(239,189,82,.28);background:rgba(255,255,255,.06);color:#fff;border-radius:14px;padding:13px 16px;font-weight:900;cursor:pointer}
       .eterniza-pix-box{text-align:center;max-width:620px;margin:0 auto}
       .eterniza-pix-img{width:300px;max-width:100%;background:#fff;border-radius:20px;padding:14px;margin:12px auto;display:block}
-      .eterniza-pix-text{width:100%;min-height:96px;border-radius:16px;border:1px solid rgba(239,189,82,.25);background:rgba(255,255,255,.08);color:#fff;padding:14px;box-sizing:border-box}
+      .eterniza-cpf-label{display:block;text-align:left;color:#f6cf72;font-weight:900;margin:14px 0 7px}.eterniza-cpf-label small{color:#ead9b7;font-weight:500}.eterniza-cpf-input{width:100%;box-sizing:border-box;border:1px solid rgba(239,189,82,.25);background:rgba(255,255,255,.07);color:#fff;border-radius:14px;padding:14px 15px;font-size:17px;outline:none}.eterniza-cpf-input:focus{border-color:#efbd52;box-shadow:0 0 0 3px rgba(239,189,82,.12)}.eterniza-cpf-error{min-height:20px;color:#ff9d9d!important;text-align:left;font-weight:800;margin:8px 0!important}.eterniza-pix-text{width:100%;min-height:96px;border-radius:16px;border:1px solid rgba(239,189,82,.25);background:rgba(255,255,255,.08);color:#fff;padding:14px;box-sizing:border-box}
       .eterniza-pay-status{margin-top:18px;color:#f6cf72;font-weight:1000;display:flex;align-items:center;justify-content:center;gap:10px}
       .eterniza-spinner{width:20px;height:20px;border-radius:50%;border:3px solid rgba(246,207,114,.22);border-top-color:#f6cf72;display:inline-block;animation:eternizaSpin .85s linear infinite}
       .eterniza-loading-orb{width:74px;height:74px;border-radius:50%;margin:4px auto 18px;border:4px solid rgba(246,207,114,.18);border-top-color:#f6cf72;border-right-color:#f6cf72;animation:eternizaSpin 1s linear infinite;box-shadow:0 0 40px rgba(246,207,114,.18)}
@@ -1378,8 +1392,122 @@ function showCardSuccess(tributeId, fallbackSlug){
   };
 }
 
-async function createPreviewPix(planSlug){
+
+function onlyCpfDigits(value){
+  return String(value||'').replace(/\D/g,'').slice(0,11);
+}
+
+function formatCpfInput(value){
+  const digits=onlyCpfDigits(value);
+  return digits
+    .replace(/(\d{3})(\d)/,'$1.$2')
+    .replace(/(\d{3})(\d)/,'$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/,'$1-$2');
+}
+
+function isValidCpfInput(value){
+  const cpf=onlyCpfDigits(value);
+  if(cpf.length!==11 || /^(\d)\1{10}$/.test(cpf)) return false;
+
+  let sum=0;
+  for(let i=0;i<9;i++) sum+=Number(cpf[i])*(10-i);
+  let digit=11-(sum%11);
+  if(digit>=10) digit=0;
+  if(digit!==Number(cpf[9])) return false;
+
+  sum=0;
+  for(let i=0;i<10;i++) sum+=Number(cpf[i])*(11-i);
+  digit=11-(sum%11);
+  if(digit>=10) digit=0;
+  return digit===Number(cpf[10]);
+}
+
+async function getSavedBilling(){
   try{
+    const res=await fetch('/api/user/billing',{cache:'no-store'});
+    const data=await res.json().catch(()=>({}));
+    if(res.ok && data.ok) return data.billing||null;
+  }catch(error){
+    console.warn('Não foi possível consultar os dados de cobrança.',error);
+  }
+  return null;
+}
+
+function requestCpfBeforePix(planSlug,billing={}){
+  showPublishCheckoutStep(`
+    <div class="eterniza-pix-box">
+      <h2>Dados para pagamento</h2>
+      <p>Para gerar o PIX, informe o CPF do comprador. Ele será salvo com segurança e solicitado apenas uma vez.</p>
+      <label class="eterniza-cpf-label" for="eternizaCpfInput">CPF</label>
+      <input class="eterniza-cpf-input" id="eternizaCpfInput" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="000.000.000-00" value="${esc(formatCpfInput(billing.cpf||''))}">
+      <label class="eterniza-cpf-label" for="eternizaPhoneInput">Telefone <small>(opcional)</small></label>
+      <input class="eterniza-cpf-input" id="eternizaPhoneInput" inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000" value="${esc(billing.phone||'')}">
+      <p id="eternizaCpfError" class="eterniza-cpf-error"></p>
+      <button class="eterniza-pay-btn" type="button" id="saveCpfAndPix">Salvar e gerar PIX</button>
+      <button class="eterniza-pay-secondary" type="button" id="backCpfToPayment" style="margin-top:10px;width:100%">Voltar</button>
+    </div>
+  `);
+
+  const cpfInput=document.getElementById('eternizaCpfInput');
+  if(cpfInput){
+    cpfInput.oninput=()=>{cpfInput.value=formatCpfInput(cpfInput.value)};
+  }
+
+  const save=document.getElementById('saveCpfAndPix');
+  if(save){
+    save.onclick=async()=>{
+      const cpf=onlyCpfDigits(cpfInput?.value||'');
+      const phone=document.getElementById('eternizaPhoneInput')?.value||'';
+      const error=document.getElementById('eternizaCpfError');
+
+      if(!isValidCpfInput(cpf)){
+        if(error) error.textContent='Informe um CPF válido.';
+        return;
+      }
+
+      save.disabled=true;
+      save.textContent='Salvando...';
+      if(error) error.textContent='';
+
+      try{
+        const res=await fetch('/api/user/billing',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({cpf,phone})
+        });
+        const data=await res.json().catch(()=>({}));
+        if(!res.ok || !data.ok) throw new Error(data.message||'Não foi possível salvar o CPF.');
+        createPreviewPix(planSlug,cpf,true);
+      }catch(err){
+        if(error) error.textContent=err.message||'Não foi possível salvar os dados.';
+        save.disabled=false;
+        save.textContent='Salvar e gerar PIX';
+      }
+    };
+  }
+
+  const back=document.getElementById('backCpfToPayment');
+  if(back) back.onclick=()=>choosePaymentMethod(planSlug);
+}
+
+async function createPreviewPix(planSlug,cpfCnpj='',billingAlreadyChecked=false){
+  try{
+    let cpf=onlyCpfDigits(cpfCnpj);
+
+    if(!cpf && !billingAlreadyChecked){
+      const billing=await getSavedBilling();
+      cpf=onlyCpfDigits(billing?.cpf||'');
+      if(!isValidCpfInput(cpf)){
+        requestCpfBeforePix(planSlug,billing||{});
+        return;
+      }
+    }
+
+    if(!isValidCpfInput(cpf)){
+      requestCpfBeforePix(planSlug,{cpf});
+      return;
+    }
+
     showPublishCheckoutStep(`
       <div class="eterniza-pix-box">
         <div class="eterniza-loading-orb"></div>
@@ -1396,12 +1524,17 @@ async function createPreviewPix(planSlug){
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         tributeId: tribute.id,
-        plan: planSlug || 'premium'
+        plan: planSlug || 'premium',
+        cpfCnpj: cpf
       })
     });
 
     const data = await res.json();
     if(!res.ok || !data.ok){
+      if(data?.code==='CPF_REQUIRED'){
+        requestCpfBeforePix(planSlug,{cpf});
+        return;
+      }
       throw new Error(data.message || 'Erro ao gerar pagamento PIX.');
     }
 

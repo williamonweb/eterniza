@@ -9,7 +9,7 @@ function onlyDigits(value) {
 function isValidCpf(value) {
   const cpf = onlyDigits(value);
   if (cpf.length !== 11) return false;
-  if (/^(\d){10}$/.test(cpf)) return false;
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
 
   let sum = 0;
   for (let i = 0; i < 9; i += 1) sum += Number(cpf[i]) * (10 - i);
