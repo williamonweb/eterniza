@@ -50,6 +50,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [checkout, setCheckout] = useState(null);
   const [modal, setModal] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [plans, setPlans] = useState(DEFAULT_PLANS);
 
   async function load() {
@@ -107,6 +109,74 @@ export default function DashboardPage() {
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.replace("/login");
+  }
+
+  function tributePlanSlug(tribute) {
+    const direct =
+      tribute?.plan_id ||
+      tribute?.planId ||
+      tribute?.content?.plan?.slug ||
+      tribute?.content?.plan?.id ||
+      "";
+
+    if (direct) return String(direct).toLowerCase();
+
+    const name = String(tribute?.plan_name || tribute?.planName || "").toLowerCase();
+    if (name.includes("essencial")) return "essencial";
+    if (name.includes("eterno")) return "eterno";
+    if (name.includes("premium")) return "premium";
+    return "";
+  }
+
+  function startPublish(tribute) {
+    const savedPlanSlug = tributePlanSlug(tribute);
+
+    if (!savedPlanSlug) {
+      setModal({
+        title: "Plano não encontrado",
+        text: "Esta história antiga não possui um plano salvo. Abra a história, escolha o plano e salve novamente antes de gerar o PIX.",
+      });
+      return;
+    }
+
+    createPayment(tribute, savedPlanSlug);
+  }
+
+  async function deleteTribute() {
+    if (!deleteTarget?.id || deleting) return;
+
+    setDeleting(true);
+
+    try {
+      const res = await fetch("/api/tributes/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tributeId: deleteTarget.id }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message || "Não foi possível excluir a história.");
+      }
+
+      setTributes((current) =>
+        current.filter((tribute) => tribute.id !== deleteTarget.id)
+      );
+      setDeleteTarget(null);
+      setModal({
+        title: "História excluída",
+        text: "A história foi removida do seu painel.",
+      });
+    } catch (error) {
+      setDeleteTarget(null);
+      setModal({
+        title: "Erro ao excluir",
+        text: error.message || "Não foi possível excluir a história.",
+      });
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function createPayment(tribute, planSlug, cpfCnpj) {
@@ -235,7 +305,7 @@ export default function DashboardPage() {
           <div className="panel-head">
             <div>
               <h2>Minhas histórias</h2>
-              <p>Escolha uma história para continuar, publicar ou compartilhar.</p>
+              <p>Continue, publique ou compartilhe suas histórias.</p>
             </div>
             <a className="gold small" href="/criar">Criar nova</a>
           </div>
@@ -252,8 +322,9 @@ export default function DashboardPage() {
                 <TributeCard
                   key={tribute.id}
                   tribute={tribute}
-                  onPublish={() => setCheckout({ step: "plans", tribute })}
+                  onPublish={() => startPublish(tribute)}
                   onCopy={copyText}
+                  onDelete={() => setDeleteTarget(tribute)}
                 />
               ))}
             </div>
@@ -267,6 +338,17 @@ export default function DashboardPage() {
           plans={plans}
           onClose={() => setCheckout(null)}
           onCreatePayment={createPayment}
+        />
+      )}
+
+      {deleteTarget && (
+        <ConfirmDeleteModal
+          tribute={deleteTarget}
+          deleting={deleting}
+          onCancel={() => {
+            if (!deleting) setDeleteTarget(null);
+          }}
+          onConfirm={deleteTribute}
         />
       )}
 
@@ -290,7 +372,7 @@ function Card({ number, label }) {
   );
 }
 
-function TributeCard({ tribute, onPublish, onCopy }) {
+function TributeCard({ tribute, onPublish, onCopy, onDelete }) {
   const status = String(tribute.status || "DRAFT").toUpperCase();
   const isPublished = status === "PUBLISHED";
   const title = tribute.receiver_name || tribute.title || "História";
@@ -329,11 +411,17 @@ function TributeCard({ tribute, onPublish, onCopy }) {
             <button onClick={() => onCopy(fullPublicUrl || publicUrl)}>
               Copiar link
             </button>
+            <button className="danger-action" onClick={onDelete}>
+              Excluir
+            </button>
           </>
         ) : (
           <>
             <a className="gold small" href="/criar">Continuar criando</a>
             <button onClick={onPublish}>❤️ Publicar história</button>
+            <button className="danger-action" onClick={onDelete}>
+              Excluir
+            </button>
           </>
         )}
       </div>
@@ -343,37 +431,15 @@ function TributeCard({ tribute, onPublish, onCopy }) {
 
 function CheckoutModal({ checkout, plans, onClose, onCreatePayment }) {
   const tribute = checkout.tribute;
+  const selectedPlan =
+    checkout.payment?.plan ||
+    plans.find((plan) => plan.slug === checkout.planSlug) ||
+    null;
 
   return (
     <div className="modal-overlay">
       <div className="checkout-modal">
         <button className="modal-close" onClick={onClose}>×</button>
-
-        {checkout.step === "plans" && (
-          <>
-            <h2>❤️ Publicar sua história</h2>
-            <p className="modal-sub">
-              Sua história está pronta. Escolha como deseja eternizar este momento.
-            </p>
-
-            <div className="plan-grid">
-              {plans.map((plan) => (
-                <article className={plan.slug === "premium" ? "plan featured" : "plan"} key={plan.slug}>
-                  {plan.slug === "premium" && <span className="tag">Mais escolhido</span>}
-                  <h3>{plan.name}</h3>
-                  {plan.promoActive && <span className="tag">{plan.promoName || "Promoção"}</span>}
-                  <strong>{plan.price}</strong>
-                  {plan.promoActive && plan.regularPrice && <small className="old-price">de {plan.regularPrice}</small>}
-                  <p>{plan.desc}</p>
-                  <button onClick={() => onCreatePayment(tribute, plan.slug)}>
-                    Quero este plano ❤️
-                  </button>
-                </article>
-              ))}
-            </div>
-          </>
-        )}
-
 
         {checkout.step === "cpf" && (
           <CpfPaymentStep
@@ -387,6 +453,12 @@ function CheckoutModal({ checkout, plans, onClose, onCreatePayment }) {
           <div className="payment-state">
             <h2>Gerando pagamento...</h2>
             <p>Estamos preparando seu PIX com segurança.</p>
+            {selectedPlan && (
+              <div className="selected-plan-summary">
+                <span>Plano selecionado</span>
+                <strong>{selectedPlan.name}</strong>
+              </div>
+            )}
           </div>
         )}
 
@@ -394,6 +466,12 @@ function CheckoutModal({ checkout, plans, onClose, onCreatePayment }) {
           <div className="payment-state">
             <h2>PIX gerado com sucesso</h2>
             <p>Pague com o QR Code abaixo. Após a aprovação, sua história será publicada automaticamente.</p>
+            {selectedPlan && (
+              <div className="selected-plan-summary">
+                <span>Plano da história</span>
+                <strong>{selectedPlan.name}</strong>
+              </div>
+            )}
 
             {checkout.payment?.qrCodeBase64 && (
               <img
@@ -493,6 +571,35 @@ function CpfPaymentStep({ checkout, onCreatePayment }) {
   );
 }
 
+function ConfirmDeleteModal({ tribute, deleting, onCancel, onConfirm }) {
+  const title =
+    tribute?.receiver_name ||
+    tribute?.receiverName ||
+    tribute?.title ||
+    "esta história";
+
+  return (
+    <div className="modal-overlay">
+      <div className="info-modal confirm-delete-modal">
+        <div className="delete-icon">🗑️</div>
+        <h2>Excluir história?</h2>
+        <p>
+          Você está prestes a excluir <strong>{title}</strong>. Essa ação não poderá
+          ser desfeita.
+        </p>
+        <div className="confirm-actions">
+          <button onClick={onCancel} disabled={deleting}>
+            Cancelar
+          </button>
+          <button className="danger-confirm" onClick={onConfirm} disabled={deleting}>
+            {deleting ? "Excluindo..." : "Sim, excluir"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function InfoModal({ title, text, onClose }) {
   return (
     <div className="modal-overlay">
@@ -543,6 +650,19 @@ function Style() {
 textarea{width:100%;min-height:96px;border-radius:16px;border:1px solid rgba(239,189,82,.22);background:rgba(255,255,255,.08);color:#fff;padding:14px;box-sizing:border-box}
 .info-modal{width:min(480px,96vw);padding:28px;text-align:center}
 .pay-label{display:grid;gap:8px;text-align:left;color:#f6cf72;font-weight:900;margin:14px 0}.pay-label input{width:100%;box-sizing:border-box;border:1px solid rgba(239,189,82,.24);background:rgba(255,255,255,.08);color:#fff;border-radius:15px;padding:14px;font-size:16px}.form-error{border:1px solid rgba(255,90,90,.32);background:rgba(255,90,90,.09);color:#ffd0d0;border-radius:14px;padding:12px;margin:12px 0;text-align:left}.cpf-state{max-width:460px}.gold:disabled{opacity:.65;cursor:not-allowed}
+
+.actions .danger-action{border-color:rgba(255,105,105,.38);color:#ffb6b6}
+.actions .danger-action:hover{border-color:#ff7575;background:rgba(255,80,80,.12)}
+.confirm-delete-modal{max-width:470px;text-align:center}
+.delete-icon{font-size:42px;margin-bottom:8px}
+.confirm-delete-modal p strong{color:#fff8ea}
+.confirm-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:22px}
+.confirm-actions button{min-height:50px;border-radius:14px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;font-weight:900;cursor:pointer}
+.confirm-actions .danger-confirm{border-color:rgba(255,95,95,.5);background:linear-gradient(135deg,#8f2828,#d95454);color:#fff}
+.confirm-actions button:disabled{opacity:.6;cursor:wait}
+.selected-plan-summary{width:min(430px,100%);box-sizing:border-box;margin:16px auto;border:1px solid rgba(239,189,82,.22);background:rgba(0,0,0,.22);border-radius:16px;padding:13px 16px;display:flex;justify-content:space-between;gap:16px;align-items:center}
+.selected-plan-summary span{color:#ead9b7}
+.selected-plan-summary strong{color:#f6cf72;font-size:18px}
 @media(max-width:850px){.client-page{padding:16px}.hero,.panel-head,.top{align-items:flex-start;flex-direction:column}.stats,.cards,.plan-grid{grid-template-columns:1fr}.hero h1{font-size:36px}}
 `}</style>
   );

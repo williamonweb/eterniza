@@ -8,7 +8,7 @@ export async function POST(req) {
 
     if (!user) {
       return NextResponse.json(
-        { ok: false, message: "Não autenticado." },
+        { ok: false, message: "Sessão expirada. Entre novamente." },
         { status: 401 }
       );
     }
@@ -18,41 +18,44 @@ export async function POST(req) {
 
     if (!tributeId) {
       return NextResponse.json(
-        { ok: false, message: "Homenagem não informada." },
+        { ok: false, message: "História não informada." },
         { status: 400 }
       );
     }
 
     const tribute = await prisma.tribute.findFirst({
-      where: user.role === "ADMIN" ? { id: tributeId } : { id: tributeId, userId: user.id },
+      where: {
+        id: tributeId,
+        userId: user.id,
+      },
       select: { id: true },
     });
 
     if (!tribute) {
       return NextResponse.json(
-        { ok: false, message: "Homenagem não encontrada." },
+        { ok: false, message: "História não encontrada ou sem permissão." },
         { status: 404 }
       );
     }
 
     await prisma.$transaction(async (tx) => {
-      await tx.payment.deleteMany({ where: { tributeId } });
-      await tx.view.deleteMany({ where: { tributeId } });
-      await tx.photo.deleteMany({ where: { tributeId } });
-      await tx.tribute.delete({ where: { id: tributeId } });
+      await tx.payment.deleteMany({
+        where: { tributeId: tribute.id },
+      });
+
+      await tx.tribute.delete({
+        where: { id: tribute.id },
+      });
     });
 
-    return NextResponse.json({
-      ok: true,
-      message: "Homenagem excluída com sucesso.",
-    });
+    return NextResponse.json({ ok: true, deletedId: tribute.id });
   } catch (error) {
-    console.error("Erro em POST /api/tributes/delete:", error);
+    console.error("[tributes/delete]", error);
 
     return NextResponse.json(
       {
         ok: false,
-        message: error.message || "Erro ao excluir homenagem.",
+        message: "Não foi possível excluir a história. Tente novamente.",
       },
       { status: 500 }
     );
