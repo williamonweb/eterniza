@@ -57,10 +57,17 @@ export async function POST(req) {
 
     const body = await req.json().catch(() => ({}));
     const cpf = onlyDigits(body.cpf || body.cpfCnpj || "");
-    const phone = onlyDigits(body.phone || "");
+    const phone = onlyDigits(body.phone || "").slice(0, 11);
 
     if (!isValidCpf(cpf)) {
       return NextResponse.json({ ok: false, message: "CPF inválido." }, { status: 400 });
+    }
+
+    if (phone && phone.length !== 10 && phone.length !== 11) {
+      return NextResponse.json(
+        { ok: false, message: "Telefone inválido." },
+        { status: 400 }
+      );
     }
 
     const existingCpf = await prisma.user.findFirst({

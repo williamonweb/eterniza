@@ -2,38 +2,28 @@
 
 import { useEffect, useState } from "react";
 
-function normalizeCpf(value) {
-  return String(value || "").replace(/\D/g, "").slice(0, 11);
+
+function onlyDigits(value) {
+  return String(value || "").replace(/\D/g, "");
 }
 
-function formatCpf(value) {
-  const digits = normalizeCpf(value);
+function formatPhone(value) {
+  const digits = onlyDigits(value).slice(0, 11);
 
-  return digits
-    .replace(/^(\d{3})(\d)/, "$1.$2")
-    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
-    .replace(/\.(\d{3})(\d)/, ".$1-$2");
-}
-
-function isValidCpf(value) {
-  const cpf = normalizeCpf(value);
-
-  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) {
-    return false;
+  if (digits.length <= 10) {
+    return digits
+      .replace(/^(\d{2})(\d)/, "($1) $2")
+      .replace(/(\d{4})(\d)/, "$1-$2");
   }
 
-  const calculateDigit = (length) => {
-    let sum = 0;
+  return digits
+    .replace(/^(\d{2})(\d)/, "($1) $2")
+    .replace(/(\d{5})(\d)/, "$1-$2");
+}
 
-    for (let index = 0; index < length; index += 1) {
-      sum += Number(cpf[index]) * (length + 1 - index);
-    }
-
-    const rest = (sum * 10) % 11;
-    return rest === 10 ? 0 : rest;
-  };
-
-  return calculateDigit(9) === Number(cpf[9]) && calculateDigit(10) === Number(cpf[10]);
+function isValidPhone(value) {
+  const digits = onlyDigits(value);
+  return digits.length === 10 || digits.length === 11;
 }
 
 export default function Cadastro() {
@@ -42,7 +32,6 @@ export default function Cadastro() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
-  const [cpf, setCpf] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
@@ -60,7 +49,6 @@ export default function Cadastro() {
     event.preventDefault();
 
     const mail = email.trim().toLowerCase();
-    const normalizedCpf = normalizeCpf(cpf);
 
     setError("");
 
@@ -74,8 +62,8 @@ export default function Cadastro() {
       return;
     }
 
-    if (!isValidCpf(normalizedCpf)) {
-      setError("Informe um CPF válido para concluir o cadastro.");
+    if (!isValidPhone(whatsapp)) {
+      setError("Informe um WhatsApp válido com DDD.");
       return;
     }
 
@@ -98,8 +86,7 @@ export default function Cadastro() {
         body: JSON.stringify({
           name: name.trim(),
           email: mail,
-          whatsapp: whatsapp.trim(),
-          cpf: normalizedCpf,
+          whatsapp: onlyDigits(whatsapp),
           password,
         }),
       });
@@ -121,7 +108,6 @@ export default function Cadastro() {
           userEmail: user.email,
           userName: user.name,
           userWhatsapp: user.whatsapp || user.phone || "",
-          userCpf: normalizedCpf,
           isAdmin: false,
         })
       );
@@ -201,28 +187,15 @@ export default function Cadastro() {
               <span>WhatsApp</span>
               <input
                 type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                maxLength={15}
                 value={whatsapp}
-                onChange={(event) => setWhatsapp(event.target.value)}
+                onChange={(event) => setWhatsapp(formatPhone(event.target.value))}
                 autoComplete="tel"
                 inputMode="tel"
                 placeholder="(51) 99999-9999"
               />
-            </label>
-
-            <label className="auth-field">
-              <span>CPF</span>
-              <input
-                type="text"
-                value={cpf}
-                onChange={(event) => setCpf(formatCpf(event.target.value))}
-                autoComplete="off"
-                inputMode="numeric"
-                maxLength={14}
-                placeholder="000.000.000-00"
-                aria-describedby="cpf-help"
-                required
-              />
-              <small id="cpf-help">Necessário para gerar o pagamento com segurança.</small>
             </label>
 
             <label className="auth-field">

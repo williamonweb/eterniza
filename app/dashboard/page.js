@@ -16,6 +16,20 @@ function onlyDigits(value) {
   return String(value || "").replace(/\D/g, "");
 }
 
+function formatPhone(value) {
+  const digits = onlyDigits(value).slice(0, 11);
+
+  if (digits.length <= 10) {
+    return digits
+      .replace(/^(\d{2})(\d)/, "($1) $2")
+      .replace(/(\d{4})(\d)/, "$1-$2");
+  }
+
+  return digits
+    .replace(/^(\d{2})(\d)/, "($1) $2")
+    .replace(/(\d{5})(\d)/, "$1-$2");
+}
+
 function formatCpf(value) {
   const digits = onlyDigits(value).slice(0, 11);
   return digits
@@ -544,7 +558,7 @@ function CheckoutModal({ checkout, plans, onClose, onCreatePayment }) {
 
 function CpfPaymentStep({ checkout, onCreatePayment }) {
   const [cpf, setCpf] = useState(checkout.cpf || "");
-  const [phone, setPhone] = useState(checkout.phone || "");
+  const [phone, setPhone] = useState(formatPhone(checkout.phone || ""));
   const [error, setError] = useState(checkout.error || "");
   const [saving, setSaving] = useState(false);
 
@@ -600,9 +614,11 @@ function CpfPaymentStep({ checkout, onCreatePayment }) {
         Telefone opcional
         <input
           value={phone}
-          onChange={(event) => setPhone(event.target.value)}
+          onChange={(event) => setPhone(formatPhone(event.target.value))}
           placeholder="(51) 99999-9999"
           inputMode="tel"
+          autoComplete="tel"
+          maxLength={15}
         />
       </label>
 

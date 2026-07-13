@@ -194,6 +194,27 @@ function adminLogout(){
 }
 function showModal(t,m){$('modalTitle').textContent=t;$('modalText').textContent=m;$('modal').classList.remove('hidden')} $('modalOk').onclick=()=>$('modal').classList.add('hidden');
 
+function normalizePhone(value){
+  return String(value || '').replace(/\D/g,'').slice(0,11);
+}
+
+function formatPhone(value){
+  const digits=normalizePhone(value);
+  if(digits.length<=10){
+    return digits
+      .replace(/^(\d{2})(\d)/,'($1) $2')
+      .replace(/(\d{4})(\d)/,'$1-$2');
+  }
+  return digits
+    .replace(/^(\d{2})(\d)/,'($1) $2')
+    .replace(/(\d{5})(\d)/,'$1-$2');
+}
+
+function isValidPhone(value){
+  const digits=normalizePhone(value);
+  return digits.length===10 || digits.length===11;
+}
+
 function normalizeCpf(value){
   return String(value || '').replace(/\D/g,'').slice(0,11);
 }
@@ -231,8 +252,7 @@ function setAuthMode(mode='login'){
 async function createAccount(){
   const button=$('createAccountBtn');
   const name=String($('newName')?.value||'').trim();
-  const phone=String($('newWhatsapp')?.value||'').trim();
-  const cpf=normalizeCpf($('newCpf')?.value||'');
+  const phone=normalizePhone($('newWhatsapp')?.value||'');
   const email=String($('newEmail')?.value||'').trim().toLowerCase();
   const password=String($('newPassword')?.value||'');
 
@@ -240,9 +260,9 @@ async function createAccount(){
     $('newName')?.focus();
     return showModal('Nome obrigatório','Informe seu nome completo para continuar.');
   }
-  if(!isValidCpf(cpf)){
-    $('newCpf')?.focus();
-    return showModal('CPF inválido','Confira o CPF informado e tente novamente.');
+  if(!isValidPhone(phone)){
+    $('newWhatsapp')?.focus();
+    return showModal('WhatsApp inválido','Informe um telefone válido com DDD.');
   }
   if(!email || !email.includes('@')){
     $('newEmail')?.focus();
@@ -258,7 +278,7 @@ async function createAccount(){
     const response=await fetch('/api/auth/register',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({name,phone,cpf,email,password})
+      body:JSON.stringify({name,phone,email,password})
     });
     const data=await response.json().catch(()=>({}));
     if(!response.ok || !data.ok) throw new Error(data.message || 'Não foi possível criar sua conta.');
@@ -268,7 +288,6 @@ async function createAccount(){
       userName:data.user?.name || name,
       userEmail:data.user?.email || email,
       userPhone:data.user?.phone || phone,
-      userCpf:cpf,
       isAdmin:false
     };
     saveState();
@@ -1262,10 +1281,19 @@ function setupAuthAndYoutubeHelpers(){
   });
   const cpfInput=$('newCpf');
   if(cpfInput){
-    cpfInput.addEventListener('input',()=>{cpfInput.value=formatCpf(cpfInput.value);});
-    cpfInput.addEventListener('blur',()=>{
-      if(cpfInput.value && !isValidCpf(cpfInput.value)) cpfInput.setAttribute('aria-invalid','true');
-      else cpfInput.removeAttribute('aria-invalid');
+    const wrapper=cpfInput.closest('label, .field, .auth-field, .form-group, div');
+    if(wrapper) wrapper.style.display='none';
+    cpfInput.removeAttribute('required');
+    cpfInput.value='';
+  }
+
+  const phoneInput=$('newWhatsapp');
+  if(phoneInput){
+    phoneInput.setAttribute('inputmode','tel');
+    phoneInput.setAttribute('autocomplete','tel');
+    phoneInput.setAttribute('maxlength','15');
+    phoneInput.addEventListener('input',()=>{
+      phoneInput.value=formatPhone(phoneInput.value);
     });
   }
   const pass=$('password');
@@ -1877,7 +1905,7 @@ function requestCpfBeforePix(planSlug,billing={}){
       <label class="eterniza-cpf-label" for="eternizaCpfInput">CPF</label>
       <input class="eterniza-cpf-input" id="eternizaCpfInput" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="000.000.000-00" value="${esc(formatCpfInput(billing.cpf||''))}">
       <label class="eterniza-cpf-label" for="eternizaPhoneInput">Telefone <small>(opcional)</small></label>
-      <input class="eterniza-cpf-input" id="eternizaPhoneInput" inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000" value="${esc(billing.phone||'')}">
+      <input class="eterniza-cpf-input" id="eternizaPhoneInput" inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000" value="${esc(formatPhone(billing.phone||''))}">
       <p id="eternizaCpfError" class="eterniza-cpf-error"></p>
       <button class="eterniza-pay-btn" type="button" id="saveCpfAndPix">Salvar e gerar PIX</button>
       <button class="eterniza-pay-secondary" type="button" id="backCpfToPayment" style="margin-top:10px;width:100%">Voltar</button>
@@ -1889,11 +1917,17 @@ function requestCpfBeforePix(planSlug,billing={}){
     cpfInput.oninput=()=>{cpfInput.value=formatCpfInput(cpfInput.value)};
   }
 
+  const phoneInput=document.getElementById('eternizaPhoneInput');
+  if(phoneInput){
+    phoneInput.maxLength=15;
+    phoneInput.oninput=()=>{phoneInput.value=formatPhone(phoneInput.value)};
+  }
+
   const save=document.getElementById('saveCpfAndPix');
   if(save){
     save.onclick=async()=>{
       const cpf=onlyCpfDigits(cpfInput?.value||'');
-      const phone=document.getElementById('eternizaPhoneInput')?.value||'';
+      const phone=normalizePhone(document.getElementById('eternizaPhoneInput')?.value||'');
       const error=document.getElementById('eternizaCpfError');
 
       if(!isValidCpfInput(cpf)){
