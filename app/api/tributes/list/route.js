@@ -48,6 +48,16 @@ function resolvePlan(tribute) {
   };
 }
 
+function resolvePhotos(tribute) {
+  const content = normalizeContent(tribute.content);
+  const contentPhotos = Array.isArray(content.photos) ? content.photos.filter(Boolean) : [];
+  const relationalPhotos = Array.isArray(tribute.photos) ? tribute.photos.filter((photo) => photo?.url) : [];
+  return {
+    thumbnailUrl: relationalPhotos[0]?.url || contentPhotos[0] || null,
+    count: Math.max(contentPhotos.length, relationalPhotos.length),
+  };
+}
+
 export async function GET() {
   try {
     const user = await getCurrentUser();
@@ -108,6 +118,7 @@ export async function GET() {
       tributes: tributes.map((tribute) => {
         const content = normalizeContent(tribute.content);
         const plan = resolvePlan(tribute);
+        const photoInfo = resolvePhotos(tribute);
 
         return {
           id: tribute.id,
@@ -140,6 +151,8 @@ export async function GET() {
           plan_photos: plan.photos,
           plan_duration: plan.duration,
           plan,
+          thumbnail_url: photoInfo.thumbnailUrl,
+          photos_count: photoInfo.count,
 
           public_url:
             tribute.publicUrl ||

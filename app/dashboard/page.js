@@ -103,7 +103,8 @@ export default function DashboardPage() {
     const total = tributes.length;
     const drafts = tributes.filter((t) => String(t.status) === "DRAFT").length;
     const published = tributes.filter((t) => String(t.status) === "PUBLISHED").length;
-    return { total, drafts, published };
+    const views = tributes.reduce((sum, tribute) => sum + Number(tribute.views_count || 0), 0);
+    return { total, drafts, published, views };
   }, [tributes]);
 
   async function logout() {
@@ -276,36 +277,51 @@ export default function DashboardPage() {
 
       <section className="shell">
         <header className="top">
-          <div>
-            <strong>❤️ Meu Eterniza</strong>
-            <span>Aqui vivem as histórias que você criou.</span>
+          <a className="brand-lockup" href="/">
+            <img src="/eterniza/assets/brand/logo-eterniza.png" alt="Eterniza" />
+            <div>
+              <strong>Meu Eterniza</strong>
+              <span>Onde cada história vive para sempre.</span>
+            </div>
+          </a>
+          <div className="top-actions">
+            <a className="top-new" href="/criar">+ Nova história</a>
+            <button onClick={logout}>Sair</button>
           </div>
-          <button onClick={logout}>🚪 Sair</button>
         </header>
 
-        <section className="hero">
-          <div>
-            <h1>Olá, {user?.name || "cliente"}.</h1>
+        <section className="hero hero-premium">
+          <div className="hero-copy">
+            <span className="eyebrow">Painel do cliente</span>
+            <h1>Bem-vindo de volta, {user?.name?.split(" ")?.[0] || "cliente"}.</h1>
             <p>
-              Toda história merece ser lembrada. Continue seus rascunhos,
-              publique suas homenagens e compartilhe momentos que vivem para sempre.
+              Continue seus rascunhos, publique suas homenagens e acompanhe as histórias
+              criadas para pessoas especiais.
             </p>
+            <div className="hero-actions">
+              <a className="gold" href="/criar">Criar nova homenagem</a>
+              <a className="hero-link" href="#historias">Ver minhas histórias</a>
+            </div>
           </div>
-
-          <a className="gold" href="/criar">+ Criar nova história</a>
+          <div className="hero-image">
+            <img src="/eterniza/assets/brand/preview-couple.jpg" alt="Experiência Eterniza" />
+            <div className="hero-count"><span>Histórias eternizadas</span><strong>{stats.total}</strong></div>
+          </div>
         </section>
 
         <section className="stats">
-          <Card number={stats.total} label="histórias" />
-          <Card number={stats.drafts} label="rascunhos" />
-          <Card number={stats.published} label="publicadas" />
+          <Card icon="📚" number={stats.total} label="Histórias" detail="Total criado" />
+          <Card icon="📝" number={stats.drafts} label="Rascunhos" detail="Em construção" />
+          <Card icon="✨" number={stats.published} label="Publicadas" detail="Prontas para compartilhar" />
+          <Card icon="👁️" number={stats.views} label="Visualizações" detail="Em todas as histórias" />
         </section>
 
-        <section className="panel">
+        <section className="panel" id="historias">
           <div className="panel-head">
             <div>
+              <span className="eyebrow">Sua coleção</span>
               <h2>Minhas histórias</h2>
-              <p>Continue, publique ou compartilhe suas histórias.</p>
+              <p>Gerencie, publique e compartilhe suas homenagens.</p>
             </div>
             <a className="gold small" href="/criar">Criar nova</a>
           </div>
@@ -363,19 +379,41 @@ export default function DashboardPage() {
   );
 }
 
-function Card({ number, label }) {
+function Card({ icon, number, label, detail }) {
   return (
     <div className="stat">
-      <strong>{number}</strong>
-      <span>{label}</span>
+      <div className="stat-icon">{icon}</div>
+      <div>
+        <strong>{Number(number || 0).toLocaleString("pt-BR")}</strong>
+        <span>{label}</span>
+        <small>{detail}</small>
+      </div>
     </div>
   );
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString("pt-BR");
+}
+
+function planClass(value) {
+  const slug = String(value || "premium").toLowerCase();
+  if (slug === "essencial") return "essential";
+  if (slug === "eterno") return "eternal";
+  return "premium";
 }
 
 function TributeCard({ tribute, onPublish, onCopy, onDelete }) {
   const status = String(tribute.status || "DRAFT").toUpperCase();
   const isPublished = status === "PUBLISHED";
   const title = tribute.receiver_name || tribute.title || "História";
+  const planSlug = tribute.plan_id || tribute.plan?.slug || "premium";
+  const planName = tribute.plan_name || tribute.plan?.name || "Premium";
+  const photoCount = Number(tribute.photos_count || tribute.photos?.length || 0);
+  const photoLimit = Number(tribute.plan_photos || tribute.plan?.photos || 0);
+  const thumbnail = tribute.thumbnail_url || tribute.photos?.[0]?.url || "/eterniza/assets/brand/preview-couple.jpg";
   const publicUrl = tribute.slug ? `/presente/${tribute.slug}` : null;
   const fullPublicUrl =
     publicUrl && typeof window !== "undefined"
@@ -385,24 +423,29 @@ function TributeCard({ tribute, onPublish, onCopy, onDelete }) {
   return (
     <article className="tribute-card">
       <div className="image">
-        <img src="/eterniza/assets/brand/preview-couple.jpg" alt={title} />
+        <img src={thumbnail} alt={title} />
+        <div className="image-shade"></div>
+        <span className={`pill ${isPublished ? "published" : ""}`}>{isPublished ? "Publicada" : "Rascunho"}</span>
+        <span className={`plan-pill ${planClass(planSlug)}`}>{planName}</span>
       </div>
 
-      <span className={`pill ${isPublished ? "published" : ""}`}>
-        {isPublished ? "Publicado" : "Rascunho"}
-      </span>
-
-      <h3>{title}</h3>
-      <p>{tribute.category || "Presente"} • Eterniza</p>
-
-      {isPublished && publicUrl && (
-        <div className="public-link-box">
-          <small>Link público</small>
-          <code>{publicUrl}</code>
+      <div className="tribute-content">
+        <div className="tribute-heading"><div><small>{tribute.category || "Homenagem"}</small><h3>{title}</h3></div><span>❤</span></div>
+        <div className="meta-grid">
+          <div><span>Fotos</span><strong>{photoCount}{photoLimit ? ` / ${photoLimit}` : ""}</strong></div>
+          <div><span>Visualizações</span><strong>{Number(tribute.views_count || 0).toLocaleString("pt-BR")}</strong></div>
+          <div><span>Criada em</span><strong>{formatDate(tribute.created_at)}</strong></div>
+          <div><span>Validade</span><strong>{tribute.plan_duration || "Vitalícia"}</strong></div>
         </div>
-      )}
 
-      <div className="actions">
+        {isPublished && publicUrl && (
+          <div className="public-link-box">
+            <small>Link público</small>
+            <code>{publicUrl}</code>
+          </div>
+        )}
+
+        <div className="actions">
         {isPublished && publicUrl ? (
           <>
             <a className="gold small" href={publicUrl} target="_blank" rel="noreferrer">
@@ -424,6 +467,7 @@ function TributeCard({ tribute, onPublish, onCopy, onDelete }) {
             </button>
           </>
         )}
+        </div>
       </div>
     </article>
   );
@@ -663,7 +707,13 @@ textarea{width:100%;min-height:96px;border-radius:16px;border:1px solid rgba(239
 .selected-plan-summary{width:min(430px,100%);box-sizing:border-box;margin:16px auto;border:1px solid rgba(239,189,82,.22);background:rgba(0,0,0,.22);border-radius:16px;padding:13px 16px;display:flex;justify-content:space-between;gap:16px;align-items:center}
 .selected-plan-summary span{color:#ead9b7}
 .selected-plan-summary strong{color:#f6cf72;font-size:18px}
-@media(max-width:850px){.client-page{padding:16px}.hero,.panel-head,.top{align-items:flex-start;flex-direction:column}.stats,.cards,.plan-grid{grid-template-columns:1fr}.hero h1{font-size:36px}}
+
+.brand-lockup{display:flex;align-items:center;gap:12px;color:inherit;text-decoration:none}.brand-lockup img{width:56px;height:56px;object-fit:contain;border-radius:16px;background:#020202}.brand-lockup strong{font-size:21px;color:#f6cf72}.brand-lockup span{display:block;color:#d8c6a2;font-size:13px;margin-top:3px}.top-actions{display:flex;gap:10px}.top-new{border:1px solid rgba(239,189,82,.24);border-radius:13px;padding:12px 16px;color:#fff;text-decoration:none;font-weight:900;background:rgba(255,255,255,.04)}
+.hero-premium{display:grid;grid-template-columns:1.05fr .95fr;padding:0;overflow:hidden;min-height:390px}.hero-copy{padding:42px;display:flex;flex-direction:column;justify-content:center}.eyebrow{color:#efbd52;text-transform:uppercase;letter-spacing:.12em;font-size:12px;font-weight:1000}.hero-copy h1{font-size:clamp(42px,5vw,68px);line-height:.98}.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:26px}.hero-link{border:1px solid rgba(239,189,82,.24);border-radius:15px;padding:14px 20px;color:#fff;text-decoration:none;font-weight:900}.hero-image{position:relative;min-height:390px}.hero-image img{width:100%;height:100%;object-fit:cover}.hero-image:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#071117 0%,rgba(7,17,23,.2) 45%,rgba(0,0,0,.08))}.hero-count{position:absolute;right:22px;bottom:22px;z-index:2;border:1px solid rgba(239,189,82,.3);background:rgba(3,7,8,.8);border-radius:18px;padding:15px 18px;text-align:right}.hero-count span{display:block;color:#dbc9a8;font-size:12px}.hero-count strong{display:block;color:#f6cf72;font-size:34px}
+.stats{grid-template-columns:repeat(4,1fr)}.stat{display:flex;align-items:center;gap:14px}.stat-icon{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;background:rgba(239,189,82,.1);border:1px solid rgba(239,189,82,.18);font-size:22px}.stat small{display:block;color:#a99f90;margin-top:3px}
+.tribute-card{padding:0;overflow:hidden;transition:.25s}.tribute-card:hover{transform:translateY(-4px);border-color:rgba(239,189,82,.42)}.image{position:relative;height:210px}.image img{height:100%;display:block;transition:.4s}.tribute-card:hover .image img{transform:scale(1.035)}.image-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.08),rgba(0,0,0,.6))}.pill{position:absolute;left:14px;top:14px;z-index:2;background:rgba(124,86,27,.82)}.pill.published{background:rgba(31,140,77,.8)}.plan-pill{position:absolute;right:14px;top:14px;z-index:2;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:1000}.plan-pill.essential{background:rgba(33,107,77,.86);color:#d7ffec}.plan-pill.premium{background:rgba(179,126,35,.88);color:#fff3c8}.plan-pill.eternal{background:rgba(92,57,139,.88);color:#f0ddff}.tribute-content{padding:19px}.tribute-heading{display:flex;justify-content:space-between;gap:12px}.tribute-heading small{color:#d9bb78;text-transform:uppercase;font-size:11px;letter-spacing:.08em;font-weight:900}.tribute-heading h3{font-family:Georgia,serif;font-size:27px;color:#fff7ea;margin:5px 0 0}.tribute-heading>span{color:#efbd52}.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:17px 0}.meta-grid div{border:1px solid rgba(239,189,82,.12);background:rgba(0,0,0,.18);border-radius:13px;padding:10px}.meta-grid span{display:block;color:#9f978a;font-size:10px;text-transform:uppercase}.meta-grid strong{display:block;color:#f3dfb4;margin-top:4px;font-size:13px}.actions{display:grid;grid-template-columns:1fr 1fr}.actions .danger-action{grid-column:1/-1}
+@media(max-width:1050px){.hero-premium{grid-template-columns:1fr}.hero-image{min-height:300px}.stats{grid-template-columns:repeat(2,1fr)}.cards{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:850px){.client-page{padding:14px}.hero,.panel-head,.top{align-items:flex-start;flex-direction:column}.hero-copy{padding:28px}.hero-image{min-height:250px}.stats,.cards,.plan-grid{grid-template-columns:1fr}.hero h1{font-size:40px}.top-actions{width:100%;flex-direction:column}.top-actions>*{width:100%;justify-content:center}.actions{grid-template-columns:1fr}.actions .danger-action{grid-column:auto}}
 `}</style>
   );
 }
