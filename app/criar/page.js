@@ -38,7 +38,7 @@ export default function Criar() {
 
   return (
     <iframe
-      src="/eterniza/index.html?start=recipient&v=57"
+      src="/eterniza/index.html?start=recipient&v=58.1"
       style={{ border: 0, width: '100vw', height: '100vh', display: 'block' }}
     />
   );

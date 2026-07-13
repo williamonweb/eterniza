@@ -160,7 +160,7 @@ function autosaveToNeon(){
           state.tributeId=data.tribute.id;
           state.slug=data.tribute.slug||state.slug;
           state.publicUrl=data.tribute.public_url||state.publicUrl;
-          localStorage.setItem('giftBuilderState',JSON.stringify(state));
+          persistBuilderState();
           document.body.dataset.autosave='saved';
         }else{
           document.body.dataset.autosave='error';
@@ -169,7 +169,23 @@ function autosaveToNeon(){
     },900);
   }catch(e){}
 }
-function saveState(){localStorage.setItem('giftBuilderState',JSON.stringify(state)); autosaveToNeon()} function saveOrders(){localStorage.setItem('giftOrders',JSON.stringify(orders))}
+function persistBuilderState(){
+  try{
+    localStorage.setItem('giftBuilderState',JSON.stringify(state));
+    return true;
+  }catch(error){
+    console.warn('Não foi possível salvar todo o rascunho no navegador.',error);
+    try{
+      const lightweight={...state,photos:[]};
+      localStorage.setItem('giftBuilderState',JSON.stringify(lightweight));
+    }catch(innerError){
+      console.warn('Falha ao salvar estado reduzido.',innerError);
+    }
+    return false;
+  }
+}
+function saveState(){persistBuilderState(); autosaveToNeon()}
+function saveOrders(){localStorage.setItem('giftOrders',JSON.stringify(orders))}
 function adminLogout(){
   stopAppMusic();
   state={};
@@ -382,34 +398,106 @@ function renderSlots(total=planPhotoLimit(state.plan)){
     btn.onclick=(ev)=>{
       ev.stopPropagation();
       const idx=Number(btn.dataset.remove);
-      state.photos.splice(idx,1);
+      state.photos[idx]=null;
+      while(state.photos.length && !state.photos[state.photos.length-1]) state.photos.pop();
       saveState();
       renderSlots(total);
     };
   });
 }
-function filesToDataUrls(files){
-  return Promise.all([...files].map(f=>new Promise(res=>{
-    const r=new FileReader();
-    r.onload=e=>res(e.target.result);
-    r.readAsDataURL(f);
-  })));
+function compressImageFile(file,{maxDimension=1600,quality=.82}={}){
+  return new Promise((resolve,reject)=>{
+    if(!file || !String(file.type||'').startsWith('image/')){
+      reject(new Error('Arquivo de imagem inválido.'));
+      return;
+    }
+
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error('Não foi possível ler a imagem.'));
+    reader.onload=()=>{
+      const image=new Image();
+      image.onerror=()=>reject(new Error('Não foi possível processar a imagem.'));
+      image.onload=()=>{
+        const originalWidth=image.naturalWidth||image.width;
+        const originalHeight=image.naturalHeight||image.height;
+        const scale=Math.min(1,maxDimension/Math.max(originalWidth,originalHeight));
+        const width=Math.max(1,Math.round(originalWidth*scale));
+        const height=Math.max(1,Math.round(originalHeight*scale));
+        const canvas=document.createElement('canvas');
+        canvas.width=width;
+        canvas.height=height;
+        const context=canvas.getContext('2d',{alpha:false});
+        context.fillStyle='#ffffff';
+        context.fillRect(0,0,width,height);
+        context.drawImage(image,0,0,width,height);
+        resolve(canvas.toDataURL('image/jpeg',quality));
+      };
+      image.src=reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function filesToDataUrls(files){
+  const selected=[...files];
+  const results=[];
+  for(const file of selected){
+    try{
+      results.push(await compressImageFile(file));
+    }catch(error){
+      console.warn('Imagem ignorada durante a compressão.',error);
+    }
+  }
+  return results;
 }
 $('photos').addEventListener('change',async()=>{
+  const input=$('photos');
   const max=planPhotoLimit(state.plan);
-  const chosen=await filesToDataUrls($('photos').files);
-  if(!chosen.length) return;
-  state.photos=Array.isArray(state.photos)?state.photos:[];
-  let slot=Number($('photos').dataset.slot||0);
-  let added=0;
-  chosen.forEach(src=>{
-    if(slot<max){ state.photos[slot]=src; slot++; added++; }
-  });
-  state.photos=state.photos.filter(Boolean).slice(0,max);
-  saveState();
-  renderSlots(max);
-  const rejected=chosen.length-added;
-  if(rejected>0) showModal('Limite do plano',`O plano ${state.plan?.name||''} aceita até ${max} foto(s). ${rejected} foto(s) não foram adicionadas.`);
+
+  if(!state.plan || !max){
+    return showModal('Plano não encontrado','Escolha um plano antes de adicionar as fotos.');
+  }
+
+  const requestedFiles=[...(input.files||[])];
+  if(!requestedFiles.length) return;
+
+  document.body.dataset.photoUpload='processing';
+
+  try{
+    const chosen=await filesToDataUrls(requestedFiles);
+    if(!chosen.length){
+      return showModal('Foto não adicionada','Não foi possível processar a imagem escolhida.');
+    }
+
+    state.photos=Array.isArray(state.photos)?state.photos:[];
+    let slot=Math.max(0,Number(input.dataset.slot||0));
+    let added=0;
+
+    chosen.forEach(src=>{
+      while(slot<max && state.photos[slot]) slot++;
+      if(slot<max){
+        state.photos[slot]=src;
+        slot++;
+        added++;
+      }
+    });
+
+    state.photos=state.photos.slice(0,max);
+    persistBuilderState();
+    autosaveToNeon();
+    renderSlots(max);
+
+    const rejected=requestedFiles.length-added;
+    if(rejected>0){
+      showModal(
+        'Limite do plano',
+        `O plano ${state.plan?.name||''} aceita até ${max} foto(s). ${rejected} foto(s) não foram adicionadas.`
+      );
+    }
+  }finally{
+    document.body.dataset.photoUpload='ready';
+    input.value='';
+  }
 });
 function youtubeId(url){if(!url)return'';const ps=[/youtube\.com\/watch\?v=([^&]+)/,/youtube\.com\/watch\?.*?&v=([^&]+)/,/youtu\.be\/([^?&]+)/,/youtube\.com\/shorts\/([^?&]+)/,/youtube\.com\/embed\/([^?&]+)/,/youtube\.com\/live\/([^?&]+)/];for(const p of ps){const m=url.trim().match(p);if(m)return m[1].replace(/[^a-zA-Z0-9_-]/g,'')}return''}
 function diff(dateValue){if(!dateValue)return null;const start=new Date(dateValue+'T00:00:00'), now=new Date(), ms=Math.max(0,now-start);return{days:Math.floor(ms/864e5),hours:Math.floor(ms/36e5),minutes:Math.floor(ms/6e4),seconds:Math.floor(ms/1e3)%60}}
@@ -474,7 +562,7 @@ function aiSuggestion(){
   $('letterText').value = recipientSpecific[r] || base[style] || base.emocionante;
   showModal('Texto criado','Criei uma sugestão mais completa. Você pode editar tudo antes de gerar a homenagem.');
 }
-async function buildPreview(){if(!state.recipient)return showModal('Falta informação','Escolha para quem é a homenagem.');if(!state.plan){renderPlans();go('planScreen');return showModal('Escolha o plano','Selecione um plano antes de continuar.');}state.receiverName=$('receiverName').value.trim();state.senderName=$('senderName').value.trim();state.specialDate=$('specialDate').value;state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();state.youtubeLink=$('youtubeLink').value.trim();state.letterText=$('letterText').value.trim();state.primaryColor=$('primaryColor').value;state.secondaryColor=$('secondaryColor').value;if(!state.receiverName||!state.senderName||!state.letterText)return showModal('Campos obrigatórios','Preencha quem recebe, quem envia e a carta.');const id=youtubeId(state.youtubeLink);if(state.musicMode==='youtube'&&state.youtubeLink&&!id)return showModal('Link inválido','Cole um link válido do YouTube.');state.youtubeId=state.musicMode==='youtube'?id:'';state.photos=(Array.isArray(state.photos)?state.photos:[]).filter(Boolean).slice(0,planPhotoLimit(state.plan));saveState();renderPreview();go('previewScreen')}
+async function buildPreview(){if(!state.recipient)return showModal('Falta informação','Escolha para quem é a homenagem.');if(!state.plan){renderPlans();go('planScreen');return showModal('Escolha o plano','Selecione um plano antes de continuar.');}state.receiverName=$('receiverName').value.trim();state.senderName=$('senderName').value.trim();state.specialDate=$('specialDate').value;state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();state.youtubeLink=$('youtubeLink').value.trim();state.letterText=$('letterText').value.trim();state.primaryColor=$('primaryColor').value;state.secondaryColor=$('secondaryColor').value;if(!state.receiverName||!state.senderName||!state.letterText)return showModal('Campos obrigatórios','Preencha quem recebe, quem envia e a carta.');const id=youtubeId(state.youtubeLink);if(state.musicMode==='youtube'&&state.youtubeLink&&!id)return showModal('Link inválido','Cole um link válido do YouTube.');state.youtubeId=state.musicMode==='youtube'?id:'';state.photos=(Array.isArray(state.photos)?state.photos:[]).slice(0,planPhotoLimit(state.plan));saveState();renderPreview();go('previewScreen')}
 function esc(txt){return String(txt||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function renderPreview(){
   if(timer) clearInterval(timer);
@@ -1640,27 +1728,26 @@ function showPublishCheckoutStep(html){
   if(close) close.onclick = closePublishCheckout;
 }
 
-function openPublishCheckout(){
-  const title = state.receiverName ? `Publicar a história de ${esc(state.receiverName)}` : 'Publicar sua história';
-  showPublishCheckoutStep(`
-    <h2>❤️ ${title}</h2>
-    <p>Sua prévia está pronta. Escolha como deseja eternizar este momento.</p>
-    <div class="eterniza-plan-grid">
-      ${publishPaymentPlans.map(plan => `
-        <article class="eterniza-plan-card ${plan.slug === 'premium' ? 'featured' : ''}">
-          ${plan.slug === 'premium' ? '<span class="tag">Mais escolhido</span>' : ''}
-          <h3>${esc(plan.name)}</h3>
-          <strong>${esc(plan.price)}</strong>
-          <p>${esc(plan.desc)}</p>
-          <button class="eterniza-pay-btn" type="button" data-publish-plan="${esc(plan.slug)}">Quero este plano ❤️</button>
-        </article>
-      `).join('')}
-    </div>
-  `);
+async function openPublishCheckout(){
+  const planSlug=String(state.plan?.slug||state.plan?.id||'').trim().toLowerCase();
 
-  document.querySelectorAll('[data-publish-plan]').forEach(btn => {
-    btn.onclick = () => choosePaymentMethod(btn.dataset.publishPlan);
-  });
+  if(!planSlug){
+    showModal('Plano não encontrado','Volte e escolha o plano da homenagem antes de gerar o PIX.');
+    return;
+  }
+
+  const validPlan=plans.find(plan=>
+    String(plan.slug||plan.id||'').toLowerCase()===planSlug
+  );
+
+  if(!validPlan){
+    showModal('Plano inválido','O plano salvo não está disponível. Volte e selecione novamente.');
+    return;
+  }
+
+  state.plan={...validPlan,photos:planPhotoLimit(validPlan)};
+  saveState();
+  await createPreviewPix(planSlug);
 }
 
 async function ensureCurrentTributeSaved(){
@@ -1682,7 +1769,7 @@ async function ensureCurrentTributeSaved(){
   state.tributeId = data.tribute.id;
   state.slug = data.tribute.slug || state.slug;
   state.publicUrl = data.tribute.public_url || state.publicUrl;
-  localStorage.setItem('giftBuilderState', JSON.stringify(state));
+  persistBuilderState();
   return data.tribute;
 }
 
@@ -1772,7 +1859,7 @@ async function getSavedBilling(){
       if(billing){
         state.userCpf=onlyCpfDigits(billing.cpf||'');
         state.userPhone=billing.phone||state.userPhone||'';
-        localStorage.setItem('giftBuilderState',JSON.stringify(state));
+        persistBuilderState();
       }
       return billing;
     }
@@ -1828,7 +1915,7 @@ function requestCpfBeforePix(planSlug,billing={}){
         if(!res.ok || !data.ok) throw new Error(data.message||'Não foi possível salvar o CPF.');
         state.userCpf=cpf;
         if(data.billing?.phone) state.userPhone=data.billing.phone;
-        localStorage.setItem('giftBuilderState',JSON.stringify(state));
+        persistBuilderState();
         createPreviewPix(planSlug,cpf,true);
       }catch(err){
         if(error) error.textContent=err.message||'Não foi possível salvar os dados.';
@@ -1843,6 +1930,12 @@ function requestCpfBeforePix(planSlug,billing={}){
 }
 
 async function createPreviewPix(planSlug,cpfCnpj='',billingAlreadyChecked=false){
+  const savedPlanSlug=String(state.plan?.slug||state.plan?.id||'').trim().toLowerCase();
+  planSlug=savedPlanSlug||String(planSlug||'').trim().toLowerCase();
+  if(!planSlug){
+    showModal('Plano não encontrado','Não foi possível identificar o plano escolhido.');
+    return;
+  }
   if(pixCreationInFlight) return;
   pixCreationInFlight=true;
 
@@ -1879,7 +1972,7 @@ async function createPreviewPix(planSlug,cpfCnpj='',billingAlreadyChecked=false)
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         tributeId: tribute.id,
-        plan: planSlug || 'premium'
+        plan: planSlug
       })
     });
 
@@ -2013,7 +2106,7 @@ if($('demoOpenBtn')) { $('demoOpenBtn').setAttribute('href','/presente/demo-mari
 $('showLoginBtn').onclick=()=>setAuthMode('login');
 $('showCreateBtn').onclick=()=>setAuthMode('create');
 $('loginBtn').onclick=()=>navigateTop('/login',true);
-$('createAccountBtn').onclick=createAccount;if($('logoutBtn')) $('logoutBtn').onclick=adminLogout;$('previewBtn').onclick=()=>{document.body.dataset.publicGift='false';buildPreview();};$('editBtn').onclick=()=>go('detailsScreen');$('publishBtn').textContent='❤️ Publicar minha história';$('publishBtn').onclick=openPublishCheckout;if($('newGiftBtn')) $('newGiftBtn').onclick=()=>go('recipientScreen'); if($('dashboardNewGiftBtn')) $('dashboardNewGiftBtn').onclick=()=>go('recipientScreen');$('backDetailsBtn').onclick=()=>go('recipientScreen');$('aiTextBtn').onclick=aiSuggestion;$('musicMode').onchange=()=>{stopAllMediaPlayback();state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();saveState();toggleYoutubeField();};document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{activeFilter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('active-filter'));b.classList.add('active-filter');renderOrders()});
+$('createAccountBtn').onclick=createAccount;if($('logoutBtn')) $('logoutBtn').onclick=adminLogout;$('previewBtn').onclick=()=>{document.body.dataset.publicGift='false';buildPreview();};$('editBtn').onclick=()=>go('detailsScreen');$('publishBtn').textContent='❤️ Gerar PIX e publicar';$('publishBtn').onclick=openPublishCheckout;if($('newGiftBtn')) $('newGiftBtn').onclick=()=>go('recipientScreen'); if($('dashboardNewGiftBtn')) $('dashboardNewGiftBtn').onclick=()=>go('recipientScreen');$('backDetailsBtn').onclick=()=>go('recipientScreen');$('aiTextBtn').onclick=aiSuggestion;$('musicMode').onchange=()=>{stopAllMediaPlayback();state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();saveState();toggleYoutubeField();};document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{activeFilter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('active-filter'));b.classList.add('active-filter');renderOrders()});
 setupAuthAndYoutubeHelpers();renderRecipients();renderPlans();loadDynamicPlans();if(state.userEmail)$('email').value=state.userEmail;
 window.addEventListener('hashchange',()=>{stopAllMediaPlayback();openRoute();});
 window.addEventListener('pagehide',stopAllMediaPlayback);
