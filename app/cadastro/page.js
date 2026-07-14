@@ -192,8 +192,6 @@ export default function Cadastro() {
                 maxLength={15}
                 value={whatsapp}
                 onChange={(event) => setWhatsapp(formatPhone(event.target.value))}
-                autoComplete="tel"
-                inputMode="tel"
                 placeholder="(51) 99999-9999"
               />
             </label>

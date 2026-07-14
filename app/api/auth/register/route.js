@@ -44,13 +44,6 @@ export async function POST(req) {
       );
     }
 
-    if (existingCpf) {
-      return NextResponse.json(
-        { ok: false, message: "Este CPF já está vinculado a outra conta." },
-        { status: 409 }
-      );
-    }
-
     const user = await prisma.user.create({
       data: {
         name,
