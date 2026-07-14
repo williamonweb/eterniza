@@ -10,7 +10,7 @@ const menu = [
   ["planos", "✦", "Planos e promoções"],
   ["analytics", "⌁", "Analytics"],
   ["cupons", "◇", "Cupons"],
-  ["configuracoes", "⚙", "Configurações", true],
+  ["configuracoes", "⚙", "Configurações"],
 ];
 
 function money(value) {
@@ -49,6 +49,9 @@ export default function AdminPage() {
   const [coupons, setCoupons] = useState([]);
   const [couponEditor, setCouponEditor] = useState(null);
   const [savingCoupon, setSavingCoupon] = useState(false);
+  const [settings, setSettings] = useState(null);
+  const [settingsTab, setSettingsTab] = useState("general");
+  const [savingSettings, setSavingSettings] = useState(false);
 
   async function load() {
     try {
@@ -66,15 +69,17 @@ export default function AdminPage() {
 
       setAuthorized(true);
 
-      const [dashboardRes, plansRes, couponsRes] = await Promise.all([
+      const [dashboardRes, plansRes, couponsRes, settingsRes] = await Promise.all([
         fetch("/api/admin/dashboard", { cache: "no-store" }),
         fetch("/api/admin/plans", { cache: "no-store" }),
         fetch("/api/admin/coupons", { cache: "no-store" }),
+        fetch("/api/admin/settings", { cache: "no-store" }),
       ]);
 
       const dashboardData = await dashboardRes.json().catch(() => ({}));
       const plansData = await plansRes.json().catch(() => ({}));
       const couponsData = await couponsRes.json().catch(() => ({}));
+      const settingsData = await settingsRes.json().catch(() => ({}));
 
       if (dashboardData?.ok) setData(dashboardData);
       if (plansData?.ok && Array.isArray(plansData.plans)) {
@@ -82,6 +87,9 @@ export default function AdminPage() {
       }
       if (couponsData?.ok && Array.isArray(couponsData.coupons)) {
         setCoupons(couponsData.coupons);
+      }
+      if (settingsData?.ok && settingsData.settings) {
+        setSettings(settingsData.settings);
       }
     } catch (error) {
       console.error(error);
@@ -212,6 +220,44 @@ export default function AdminPage() {
         title: "Erro no cupom",
         text: error.message || "Não foi possível remover o cupom.",
       });
+    }
+  }
+
+
+  function updateSetting(key, value) {
+    setSettings((current) => ({ ...(current || {}), [key]: value }));
+  }
+
+  async function saveSettings() {
+    if (!settings) return;
+
+    setSavingSettings(true);
+
+    try {
+      const response = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.message || "Não foi possível salvar as configurações.");
+      }
+
+      setSettings(result.settings);
+      setModal({
+        title: "Configurações atualizadas",
+        text: "As alterações já estão disponíveis na landing e no sistema.",
+      });
+    } catch (error) {
+      setModal({
+        title: "Erro ao salvar",
+        text: error.message || "Não foi possível salvar as configurações.",
+      });
+    } finally {
+      setSavingSettings(false);
     }
   }
 
@@ -351,9 +397,14 @@ export default function AdminPage() {
         )}
 
         {active === "configuracoes" && (
-          <ComingSoon
-            title="Configurações"
-            text="As configurações comerciais e integrações serão centralizadas aqui."
+          <SettingsManager
+            settings={settings}
+            activeTab={settingsTab}
+            setActiveTab={setSettingsTab}
+            updateSetting={updateSetting}
+            saveSettings={saveSettings}
+            saving={savingSettings}
+            metrics={metrics}
           />
         )}
       </section>
@@ -824,6 +875,321 @@ function Analytics({ data }) {
   );
 }
 
+
+function SettingsManager({
+  settings,
+  activeTab,
+  setActiveTab,
+  updateSetting,
+  saveSettings,
+  saving,
+  metrics,
+}) {
+  if (!settings) {
+    return <section className="coming-soon"><span>Configurações</span><h2>Carregando...</h2></section>;
+  }
+
+  const tabs = [
+    ["general", "Geral"],
+    ["landing", "Landing"],
+    ["commercial", "Comercial"],
+    ["payments", "Pagamentos"],
+    ["music", "Música"],
+    ["upload", "Upload"],
+    ["ai", "IA"],
+    ["whatsapp", "WhatsApp"],
+    ["emails", "E-mails"],
+  ];
+
+  const monthlyGoal = Number(settings.monthlyRevenueGoal || 0);
+  const monthlyRevenue = Number(metrics?.revenueMonth || 0);
+  const progress = monthlyGoal > 0
+    ? Math.min(100, (monthlyRevenue / monthlyGoal) * 100)
+    : 0;
+
+  return (
+    <section className="settings-stack">
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">Centro de comando</span>
+          <h2>Configurações</h2>
+          <p>Altere dados comerciais e conteúdos sem editar o código.</p>
+        </div>
+        <button className="primary" onClick={saveSettings} disabled={saving}>
+          {saving ? "Salvando..." : "Salvar configurações"}
+        </button>
+      </div>
+
+      <div className="settings-tabs">
+        {tabs.map(([id, label]) => (
+          <button
+            key={id}
+            className={activeTab === id ? "active" : ""}
+            onClick={() => setActiveTab(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "general" && (
+        <div className="settings-grid">
+          <SettingsCard title="Identidade da empresa" description="Informações principais da marca.">
+            <SettingField label="Nome da empresa">
+              <input value={settings.companyName || ""} onChange={(e) => updateSetting("companyName", e.target.value)} />
+            </SettingField>
+            <SettingField label="Slogan">
+              <input value={settings.slogan || ""} onChange={(e) => updateSetting("slogan", e.target.value)} />
+            </SettingField>
+            <SettingField label="URL da logo">
+              <input value={settings.logoUrl || ""} onChange={(e) => updateSetting("logoUrl", e.target.value)} />
+            </SettingField>
+            <SettingField label="URL do favicon">
+              <input value={settings.faviconUrl || ""} onChange={(e) => updateSetting("faviconUrl", e.target.value)} />
+            </SettingField>
+          </SettingsCard>
+
+          <SettingsCard title="Contato e redes" description="Canais oficiais exibidos aos clientes.">
+            <SettingField label="E-mail de suporte">
+              <input type="email" value={settings.supportEmail || ""} onChange={(e) => updateSetting("supportEmail", e.target.value)} />
+            </SettingField>
+            <SettingField label="WhatsApp">
+              <input value={settings.supportWhatsapp || ""} onChange={(e) => updateSetting("supportWhatsapp", e.target.value)} placeholder="5551999999999" />
+            </SettingField>
+            <SettingField label="Instagram">
+              <input value={settings.instagramUrl || ""} onChange={(e) => updateSetting("instagramUrl", e.target.value)} />
+            </SettingField>
+            <SettingField label="Facebook">
+              <input value={settings.facebookUrl || ""} onChange={(e) => updateSetting("facebookUrl", e.target.value)} />
+            </SettingField>
+            <SettingField label="Site oficial">
+              <input value={settings.websiteUrl || ""} onChange={(e) => updateSetting("websiteUrl", e.target.value)} />
+            </SettingField>
+          </SettingsCard>
+        </div>
+      )}
+
+      {activeTab === "landing" && (
+        <div className="settings-grid">
+          <SettingsCard title="Hero da landing" description="Primeira mensagem vista pelo visitante.">
+            <SettingField label="Selo superior">
+              <input value={settings.landingBadge || ""} onChange={(e) => updateSetting("landingBadge", e.target.value)} />
+            </SettingField>
+            <SettingField label="Título principal">
+              <input value={settings.landingTitleBefore || ""} onChange={(e) => updateSetting("landingTitleBefore", e.target.value)} />
+            </SettingField>
+            <SettingField label="Trecho em destaque">
+              <input value={settings.landingTitleHighlight || ""} onChange={(e) => updateSetting("landingTitleHighlight", e.target.value)} />
+            </SettingField>
+            <SettingField label="Subtítulo">
+              <textarea value={settings.landingSubtitle || ""} onChange={(e) => updateSetting("landingSubtitle", e.target.value)} />
+            </SettingField>
+          </SettingsCard>
+
+          <SettingsCard title="Aviso promocional" description="Faixa opcional no topo da landing.">
+            <SettingToggle
+              label="Mostrar aviso promocional"
+              checked={Boolean(settings.promoBannerEnabled)}
+              onChange={(value) => updateSetting("promoBannerEnabled", value)}
+            />
+            <SettingField label="Texto do aviso">
+              <input value={settings.promoBannerText || ""} onChange={(e) => updateSetting("promoBannerText", e.target.value)} />
+            </SettingField>
+          </SettingsCard>
+
+          <SettingsCard title="Seções da landing" description="Escolha o que aparece na página inicial.">
+            <SettingToggle label="Mostrar exemplos" checked={Boolean(settings.landingShowExamples)} onChange={(value) => updateSetting("landingShowExamples", value)} />
+            <SettingToggle label="Mostrar planos" checked={Boolean(settings.landingShowPlans)} onChange={(value) => updateSetting("landingShowPlans", value)} />
+            <SettingToggle label="Mostrar selos de confiança" checked={Boolean(settings.landingShowProof)} onChange={(value) => updateSetting("landingShowProof", value)} />
+          </SettingsCard>
+        </div>
+      )}
+
+      {activeTab === "commercial" && (
+        <div className="settings-grid">
+          <SettingsCard title="Metas comerciais" description="Objetivos usados no painel administrativo.">
+            <SettingField label="Meta mensal de receita">
+              <input type="number" min="0" step="100" value={settings.monthlyRevenueGoal ?? 0} onChange={(e) => updateSetting("monthlyRevenueGoal", Number(e.target.value))} />
+            </SettingField>
+            <SettingField label="Meta anual de receita">
+              <input type="number" min="0" step="1000" value={settings.annualRevenueGoal ?? 0} onChange={(e) => updateSetting("annualRevenueGoal", Number(e.target.value))} />
+            </SettingField>
+            <SettingField label="Meta mensal de vendas">
+              <input type="number" min="0" step="1" value={settings.monthlySalesGoal ?? 0} onChange={(e) => updateSetting("monthlySalesGoal", Number(e.target.value))} />
+            </SettingField>
+          </SettingsCard>
+
+          <SettingsCard title="Progresso atual" description="Comparação com o faturamento do mês.">
+            <div className="goal-preview">
+              <div><span>Receita do mês</span><strong>{money(monthlyRevenue)}</strong></div>
+              <div><span>Meta mensal</span><strong>{money(monthlyGoal)}</strong></div>
+              <div className="goal-track"><i style={{ width: `${progress}%` }} /></div>
+              <b>{progress.toFixed(1)}% concluído</b>
+            </div>
+          </SettingsCard>
+        </div>
+
+      )}
+
+      {activeTab === "payments" && (
+        <div className="settings-grid">
+          <SettingsCard title="PIX e checkout" description="Controle a disponibilidade e as mensagens do pagamento.">
+            <SettingToggle label="PIX ativo" checked={Boolean(settings.pixEnabled)} onChange={(value) => updateSetting("pixEnabled", value)} />
+            <SettingField label="Tempo de expiração visual, em minutos">
+              <input type="number" min="5" max="1440" value={settings.pixExpirationMinutes ?? 60} onChange={(e) => updateSetting("pixExpirationMinutes", Number(e.target.value))} />
+            </SettingField>
+            <SettingField label="Mensagem antes do pagamento">
+              <textarea value={settings.checkoutMessage || ""} onChange={(e) => updateSetting("checkoutMessage", e.target.value)} />
+            </SettingField>
+            <SettingField label="Mensagem após aprovação">
+              <textarea value={settings.paymentApprovedMessage || ""} onChange={(e) => updateSetting("paymentApprovedMessage", e.target.value)} />
+            </SettingField>
+            <SettingField label="Destino após o pagamento">
+              <select value={settings.afterPaymentDestination || "dashboard"} onChange={(e) => updateSetting("afterPaymentDestination", e.target.value)}>
+                <option value="dashboard">Dashboard do cliente</option>
+                <option value="tribute">Homenagem publicada</option>
+              </select>
+            </SettingField>
+          </SettingsCard>
+
+          <SettingsCard title="Status da integração" description="Segredos permanecem protegidos nas variáveis do servidor.">
+            <div className="integration-status">
+              <span className="status success">Asaas configurado no servidor</span>
+              <p>A chave da API não é exibida nem salva no navegador.</p>
+              <p>O tempo configurado aqui controla a experiência visual. A validade definitiva da cobrança depende do provedor.</p>
+            </div>
+          </SettingsCard>
+        </div>
+      )}
+
+      {activeTab === "music" && (
+        <div className="settings-grid">
+          <SettingsCard title="Experiência musical" description="Defina como as trilhas se comportam nas homenagens.">
+            <SettingToggle label="Música habilitada" checked={Boolean(settings.musicEnabled)} onChange={(value) => updateSetting("musicEnabled", value)} />
+            <SettingToggle label="Tentar reprodução automática" checked={Boolean(settings.musicAutoplay)} onChange={(value) => updateSetting("musicAutoplay", value)} />
+            <SettingToggle label="Mostrar controles de música" checked={Boolean(settings.musicShowPlayer)} onChange={(value) => updateSetting("musicShowPlayer", value)} />
+            <SettingToggle label="Permitir busca no YouTube" checked={Boolean(settings.youtubeSearchEnabled)} onChange={(value) => updateSetting("youtubeSearchEnabled", value)} />
+            <SettingField label={`Volume inicial: ${settings.musicDefaultVolume ?? 68}%`}>
+              <input type="range" min="0" max="100" value={settings.musicDefaultVolume ?? 68} onChange={(e) => updateSetting("musicDefaultVolume", Number(e.target.value))} />
+            </SettingField>
+          </SettingsCard>
+        </div>
+      )}
+
+      {activeTab === "upload" && (
+        <div className="settings-grid">
+          <SettingsCard title="Imagens das homenagens" description="Configure compressão e validação antes de salvar.">
+            <SettingToggle label="Upload de fotos habilitado" checked={Boolean(settings.uploadEnabled)} onChange={(value) => updateSetting("uploadEnabled", value)} />
+            <SettingField label="Tamanho máximo por arquivo, em MB">
+              <input type="number" min="1" max="30" value={settings.uploadMaxSizeMb ?? 8} onChange={(e) => updateSetting("uploadMaxSizeMb", Number(e.target.value))} />
+            </SettingField>
+            <SettingField label="Maior dimensão da imagem, em pixels">
+              <input type="number" min="600" max="4000" step="100" value={settings.uploadMaxDimension ?? 1600} onChange={(e) => updateSetting("uploadMaxDimension", Number(e.target.value))} />
+            </SettingField>
+            <SettingField label={`Qualidade JPEG: ${settings.uploadQualityPercent ?? 82}%`}>
+              <input type="range" min="40" max="100" value={settings.uploadQualityPercent ?? 82} onChange={(e) => updateSetting("uploadQualityPercent", Number(e.target.value))} />
+            </SettingField>
+            <SettingField label="Formatos aceitos">
+              <input value={settings.uploadAcceptedFormats || ""} onChange={(e) => updateSetting("uploadAcceptedFormats", e.target.value)} />
+            </SettingField>
+          </SettingsCard>
+        </div>
+      )}
+
+      {activeTab === "ai" && (
+        <div className="settings-grid">
+          <SettingsCard title="Sugestão de texto" description="Configurações do gerador atual e base para a futura IA guiada.">
+            <SettingToggle label="Sugestão de texto habilitada" checked={Boolean(settings.aiEnabled)} onChange={(value) => updateSetting("aiEnabled", value)} />
+            <SettingField label="Estilo padrão">
+              <select value={settings.aiDefaultStyle || "emocionante"} onChange={(e) => updateSetting("aiDefaultStyle", e.target.value)}>
+                <option value="emocionante">Emocionante</option>
+                <option value="romantico">Romântico</option>
+                <option value="gratidao">Gratidão</option>
+                <option value="amizade">Amizade</option>
+                <option value="curto">Curto</option>
+              </select>
+            </SettingField>
+            <SettingField label="Máximo de caracteres">
+              <input type="number" min="300" max="10000" value={settings.aiMaxCharacters ?? 3000} onChange={(e) => updateSetting("aiMaxCharacters", Number(e.target.value))} />
+            </SettingField>
+            <SettingField label="Prompt base futuro">
+              <textarea value={settings.aiPromptBase || ""} onChange={(e) => updateSetting("aiPromptBase", e.target.value)} />
+            </SettingField>
+          </SettingsCard>
+        </div>
+      )}
+
+      {activeTab === "whatsapp" && (
+        <div className="settings-grid">
+          <SettingsCard title="Compartilhamento por WhatsApp" description="Use {NOME}, {LINK} e {PLANO} nas mensagens.">
+            <SettingToggle label="WhatsApp habilitado" checked={Boolean(settings.whatsappEnabled)} onChange={(value) => updateSetting("whatsappEnabled", value)} />
+            <SettingField label="Mensagem padrão">
+              <textarea value={settings.whatsappTemplate || ""} onChange={(e) => updateSetting("whatsappTemplate", e.target.value)} />
+            </SettingField>
+          </SettingsCard>
+        </div>
+      )}
+
+      {activeTab === "emails" && (
+        <div className="settings-grid">
+          <SettingsCard title="Cadastro" description="Modelo usado na recepção do cliente.">
+            <SettingField label="Assunto">
+              <input value={settings.emailRegistrationSubject || ""} onChange={(e) => updateSetting("emailRegistrationSubject", e.target.value)} />
+            </SettingField>
+            <SettingField label="Mensagem">
+              <textarea value={settings.emailRegistrationBody || ""} onChange={(e) => updateSetting("emailRegistrationBody", e.target.value)} />
+            </SettingField>
+          </SettingsCard>
+
+          <SettingsCard title="PIX gerado" description="Use {LINK}, {NOME} e {PLANO}.">
+            <SettingField label="Assunto">
+              <input value={settings.emailPixSubject || ""} onChange={(e) => updateSetting("emailPixSubject", e.target.value)} />
+            </SettingField>
+            <SettingField label="Mensagem">
+              <textarea value={settings.emailPixBody || ""} onChange={(e) => updateSetting("emailPixBody", e.target.value)} />
+            </SettingField>
+          </SettingsCard>
+
+          <SettingsCard title="Pagamento aprovado" description="Mensagem enviada após a confirmação.">
+            <SettingField label="Assunto">
+              <input value={settings.emailApprovedSubject || ""} onChange={(e) => updateSetting("emailApprovedSubject", e.target.value)} />
+            </SettingField>
+            <SettingField label="Mensagem">
+              <textarea value={settings.emailApprovedBody || ""} onChange={(e) => updateSetting("emailApprovedBody", e.target.value)} />
+            </SettingField>
+          </SettingsCard>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SettingsCard({ title, description, children }) {
+  return (
+    <article className="settings-card">
+      <div className="settings-card-head">
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
+      <div className="settings-fields">{children}</div>
+    </article>
+  );
+}
+
+function SettingField({ label, children }) {
+  return <label className="setting-field"><span>{label}</span>{children}</label>;
+}
+
+function SettingToggle({ label, checked, onChange }) {
+  return (
+    <label className="setting-toggle">
+      <span>{label}</span>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <i></i>
+    </label>
+  );
+}
+
 function ComingSoon({ title, text }) {
   return (
     <section className="coming-soon">
@@ -875,9 +1241,14 @@ function Style() {
 .coupon-admin-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:15px 0}.coupon-admin-meta span{background:rgba(255,255,255,.035);border-radius:11px;padding:10px;color:#8f887e;font-size:11px}.coupon-admin-meta b{display:block;color:#fff3d5;margin-top:4px}
 .coupon-admin-actions,.coupon-editor-actions{display:flex;gap:8px;justify-content:flex-end}.coupon-admin-actions button,.coupon-editor-actions button{border:1px solid rgba(239,189,82,.16);background:rgba(255,255,255,.04);color:#fff;border-radius:11px;padding:10px 13px;font-weight:900;cursor:pointer}.danger-button{color:#ffb1b1!important;border-color:rgba(255,80,80,.2)!important}
 .coupon-form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.coupon-editor label{display:grid;gap:6px;color:#cdbf9d;font-size:12px;font-weight:900;margin:10px 0}.coupon-editor input,.coupon-editor select,.coupon-editor textarea{width:100%;border:1px solid rgba(239,189,82,.15);background:#101513;color:#fff;border-radius:11px;padding:11px}.coupon-editor textarea{min-height:82px}.coupon-switches{display:flex;gap:18px;flex-wrap:wrap;margin:12px 0 18px}
+
+.settings-stack{display:grid;gap:18px}.settings-tabs{display:flex;gap:8px;flex-wrap:wrap}.settings-tabs button{border:1px solid rgba(239,189,82,.15);background:rgba(255,255,255,.04);color:#cfc8bc;border-radius:12px;padding:11px 17px;font-weight:900;cursor:pointer}.settings-tabs button.active{background:linear-gradient(135deg,#c99337,#f7dc82);color:#171005;border-color:transparent}
+.settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.settings-card{border:1px solid rgba(239,189,82,.13);background:linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.018));border-radius:22px;padding:21px;box-shadow:0 24px 70px rgba(0,0,0,.22)}.settings-card-head h3{font:700 25px Georgia,serif;margin:0 0 6px}.settings-card-head p{margin:0;color:#918a80}.settings-fields{display:grid;gap:12px;margin-top:18px}.setting-field{display:grid;gap:7px}.setting-field>span{color:#d9c79e;font-size:12px;font-weight:900}.setting-field input,.setting-field textarea,.setting-field select{width:100%;border:1px solid rgba(239,189,82,.15);background:#101513;color:#fff;border-radius:12px;padding:12px;font:inherit}.setting-field textarea{min-height:110px;resize:vertical}.setting-field select{appearance:auto}.setting-field input[type="range"]{padding:0;background:transparent}.setting-field input:focus,.setting-field textarea:focus,.setting-field select:focus{outline:none;border-color:#efbd52;box-shadow:0 0 0 3px rgba(239,189,82,.1)}
+.setting-toggle{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;border:1px solid rgba(255,255,255,.06);border-radius:13px;padding:12px}.setting-toggle>span{font-weight:900;color:#ddd3c0}.setting-toggle input{display:none}.setting-toggle i{width:42px;height:24px;border-radius:999px;background:#2d322f;position:relative}.setting-toggle i:after{content:"";position:absolute;width:18px;height:18px;border-radius:50%;background:#999;top:3px;left:3px;transition:.2s}.setting-toggle input:checked+i{background:#8d6c29}.setting-toggle input:checked+i:after{left:21px;background:#ffe094}
+.goal-preview{display:grid;gap:12px}.goal-preview>div:not(.goal-track){display:flex;justify-content:space-between;gap:12px;color:#aaa194}.goal-preview strong{color:#fff3d5}.goal-track{height:13px;border-radius:999px;background:#1e2522;overflow:hidden}.goal-track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#c99337,#f7dc82)}.goal-preview>b{color:#efbd52}.integration-status{display:grid;gap:12px}.integration-status p{margin:0;color:#aaa194;line-height:1.55}
 @media(max-width:1180px){.admin-page{grid-template-columns:220px 1fr}.metric-grid,.plans-grid{grid-template-columns:1fr 1fr}.business-grid{grid-template-columns:1fr}}
 @media(max-width:980px){.coupon-admin-grid{grid-template-columns:1fr 1fr}.coupon-form-grid{grid-template-columns:1fr 1fr}}
-@media(max-width:760px){.coupon-admin-grid,.coupon-form-grid{grid-template-columns:1fr}.admin-page{display:block}.sidebar{height:auto;position:static}.sidebar nav{grid-template-columns:1fr 1fr}.sidebar-footer{display:none}.workspace{padding:20px 14px}.topbar,.welcome,.section-heading{align-items:flex-start;flex-direction:column}.metric-grid,.plans-grid{grid-template-columns:1fr}.first-sale{min-width:0;width:100%}.field-grid{grid-template-columns:1fr}}
+@media(max-width:760px){.settings-grid,.coupon-admin-grid,.coupon-form-grid{grid-template-columns:1fr}.admin-page{display:block}.sidebar{height:auto;position:static}.sidebar nav{grid-template-columns:1fr 1fr}.sidebar-footer{display:none}.workspace{padding:20px 14px}.topbar,.welcome,.section-heading{align-items:flex-start;flex-direction:column}.metric-grid,.plans-grid{grid-template-columns:1fr}.first-sale{min-width:0;width:100%}.field-grid{grid-template-columns:1fr}}
 `}</style>
   );
 }

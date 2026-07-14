@@ -120,6 +120,60 @@ function normalizeRemotePlan(plan){
   };
 }
 
+
+async function loadDynamicSettings(){
+  try{
+    const response=await fetch('/api/settings',{cache:'no-store'});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok || !data.ok || !data.settings) return;
+
+    const settings=data.settings;
+    systemSettings={...systemSettings,...settings};
+    const setText=(id,value)=>{
+      const element=$(id);
+      if(element && value!==undefined && value!==null) element.textContent=String(value);
+    };
+
+    setText('landingCompanyName',settings.companyName);
+    setText('landingCompanySlogan',settings.slogan);
+    setText('landingBadgeText',settings.landingBadge);
+    setText('landingTitleBefore',settings.landingTitleBefore);
+    setText('landingTitleHighlight',settings.landingTitleHighlight);
+    setText('landingSubtitleText',settings.landingSubtitle);
+
+    const promo=$('landingPromoBanner');
+    if(promo){
+      if(settings.promoBannerEnabled && settings.promoBannerText){
+        promo.textContent=settings.promoBannerText;
+        promo.classList.remove('hidden');
+        promo.style.cssText='margin:0 0 16px;padding:12px 16px;border-radius:14px;border:1px solid rgba(239,189,82,.3);background:rgba(239,189,82,.09);color:#ffe5a2;font-weight:900;text-align:center;';
+      }else{
+        promo.classList.add('hidden');
+      }
+    }
+
+    const examples=$('exemplos');
+    const plansSection=$('planos');
+    const proof=$('como-funciona');
+    if(examples) examples.style.display=settings.landingShowExamples===false?'none':'';
+    if(plansSection) plansSection.style.display=settings.landingShowPlans===false?'none':'';
+    if(proof) proof.style.display=settings.landingShowProof===false?'none':'';
+
+    const aiButton=$('aiTextBtn');
+    const aiStyle=$('aiTextStyle');
+    if(aiButton){
+      aiButton.disabled=settings.aiEnabled===false;
+      aiButton.title=settings.aiEnabled===false?'Sugestão de texto desativada pelo administrador':'';
+    }
+    if(aiStyle && settings.aiDefaultStyle) aiStyle.value=settings.aiDefaultStyle;
+
+    const youtubeOption=$('musicMode')?.querySelector('option[value="youtube"]');
+    if(youtubeOption) youtubeOption.disabled=settings.youtubeSearchEnabled===false;
+  }catch(error){
+    console.warn('Não foi possível carregar configurações públicas.',error);
+  }
+}
+
 async function loadDynamicPlans(){
   try{
     const res = await fetch('/api/plans', { cache:'no-store' });
@@ -144,6 +198,28 @@ let orders=JSON.parse(localStorage.getItem('giftOrders')||'[]');
 let timer=null, carouselTimer=null, activeFilter='todos', activeAudio=null;
 let autosaveTimer=null;
 let autosaveBusy=false;
+let systemSettings={
+  pixEnabled:true,
+  pixExpirationMinutes:60,
+  checkoutMessage:"Finalize o pagamento para publicar sua homenagem.",
+  paymentApprovedMessage:"Pagamento confirmado! Sua homenagem já está disponível.",
+  afterPaymentDestination:"dashboard",
+  musicEnabled:true,
+  musicAutoplay:false,
+  musicShowPlayer:true,
+  musicDefaultVolume:68,
+  youtubeSearchEnabled:true,
+  uploadEnabled:true,
+  uploadMaxSizeMb:8,
+  uploadMaxDimension:1600,
+  uploadQualityPercent:82,
+  uploadAcceptedFormats:"image/jpeg,image/png,image/webp",
+  aiEnabled:true,
+  aiDefaultStyle:"emocionante",
+  aiMaxCharacters:3000,
+  whatsappEnabled:true,
+  whatsappTemplate:"Olá, {NOME}! Sua homenagem está pronta: {LINK}"
+};
 function autosaveToNeon(){
   try{
     const email=(state.userEmail||'').trim().toLowerCase();
@@ -424,10 +500,23 @@ function renderSlots(total=planPhotoLimit(state.plan)){
     };
   });
 }
-function compressImageFile(file,{maxDimension=1600,quality=.82}={}){
+function compressImageFile(file,{
+  maxDimension=Number(systemSettings.uploadMaxDimension||1600),
+  quality=Math.min(1,Math.max(.4,Number(systemSettings.uploadQualityPercent||82)/100))
+}={}){
   return new Promise((resolve,reject)=>{
-    if(!file || !String(file.type||'').startsWith('image/')){
-      reject(new Error('Arquivo de imagem inválido.'));
+    if(systemSettings.uploadEnabled===false){
+      reject(new Error('O envio de fotos está temporariamente desativado.'));
+      return;
+    }
+    const accepted=String(systemSettings.uploadAcceptedFormats||'image/jpeg,image/png,image/webp').split(',').map(v=>v.trim()).filter(Boolean);
+    if(!file || !accepted.includes(String(file.type||''))){
+      reject(new Error('Formato de imagem não permitido.'));
+      return;
+    }
+    const maxBytes=Number(systemSettings.uploadMaxSizeMb||8)*1024*1024;
+    if(Number(file.size||0)>maxBytes){
+      reject(new Error(`A imagem ultrapassa ${systemSettings.uploadMaxSizeMb||8} MB.`));
       return;
     }
 
@@ -559,10 +648,13 @@ function countAnnual(dateValue,month,day){
 
 function readPhotos(files,limit){return Promise.all([...files].slice(0,limit).map(f=>new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsDataURL(f)})))}
 function aiSuggestion(){
+  if(systemSettings.aiEnabled===false){
+    return showModal('Recurso indisponível','A sugestão de texto está temporariamente desativada.');
+  }
   const r=state.recipient?.id||'outro';
   const recv=($('receiverName')?.value||'você').trim()||'você';
   const send=($('senderName')?.value||'alguém que te ama').trim()||'alguém que te ama';
-  const style=($('aiTextStyle')?.value||'emocionante');
+  const style=($('aiTextStyle')?.value||systemSettings.aiDefaultStyle||'emocionante');
   const base={
     emocionante:`${recv},\n\nExistem pessoas que entram na nossa vida e, sem perceber, passam a fazer parte dos nossos melhores capítulos. Você é uma dessas pessoas. Sua presença transformou momentos simples em lembranças especiais, e cada detalhe vivido ao seu lado merece ser guardado com carinho.\n\nEsta homenagem é uma forma de eternizar tudo aquilo que talvez as palavras do dia a dia não consigam dizer. É sobre gratidão, afeto, saudade boa, cuidado e sobre a importância que você tem na minha história.\n\nQue cada foto, cada música e cada palavra aqui sirva como lembrança de que você é especial, amado(a) e faz diferença de um jeito que o tempo nunca apaga.\n\nCom todo carinho,\n${send}`,
     romantico:`${recv},\n\nDesde que você chegou, muita coisa ganhou outro sentido. Os dias ficaram mais leves, as lembranças ficaram mais bonitas e até os silêncios passaram a ter um jeito especial quando são compartilhados com você.\n\nNossa história é feita de pequenos instantes que, juntos, viraram algo enorme dentro de mim. Um olhar, uma conversa, uma risada, um abraço no momento certo... tudo isso foi construindo um lugar onde eu sempre quero voltar.\n\nEu criei esta homenagem para que você pudesse sentir, mesmo que por alguns minutos, o tamanho do carinho que existe aqui. Que ela te lembre que você é meu cuidado, minha escolha e uma das partes mais bonitas da minha vida.\n\nCom amor,\n${send}`,
@@ -578,7 +670,8 @@ function aiSuggestion(){
     irmao:base.gratidao,
     avo:base.gratidao
   };
-  $('letterText').value = recipientSpecific[r] || base[style] || base.emocionante;
+  const suggestion=recipientSpecific[r] || base[style] || base.emocionante;
+  $('letterText').value=suggestion.slice(0,Number(systemSettings.aiMaxCharacters||3000));
   showModal('Texto criado','Criei uma sugestão mais completa. Você pode editar tudo antes de gerar a homenagem.');
 }
 async function buildPreview(){if(!state.recipient)return showModal('Falta informação','Escolha para quem é a homenagem.');if(!state.plan){renderPlans();go('planScreen');return showModal('Escolha o plano','Selecione um plano antes de continuar.');}state.receiverName=$('receiverName').value.trim();state.senderName=$('senderName').value.trim();state.specialDate=$('specialDate').value;state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();state.youtubeLink=$('youtubeLink').value.trim();state.letterText=$('letterText').value.trim();state.primaryColor=$('primaryColor').value;state.secondaryColor=$('secondaryColor').value;if(!state.receiverName||!state.senderName||!state.letterText)return showModal('Campos obrigatórios','Preencha quem recebe, quem envia e a carta.');const id=youtubeId(state.youtubeLink);if(state.musicMode==='youtube'&&state.youtubeLink&&!id)return showModal('Link inválido','Cole um link válido do YouTube.');state.youtubeId=state.musicMode==='youtube'?id:'';state.photos=(Array.isArray(state.photos)?state.photos:[]).slice(0,planPhotoLimit(state.plan));saveState();renderPreview();go('previewScreen')}
@@ -601,15 +694,15 @@ function renderPreview(){
       <div class="story-open" id="storyOpen">
         <img class="story-logo" src="assets/brand/logo-eterniza.png" alt="Eterniza" />
         <span class="badge">${esc(r.theme)}</span>
-        <h2>${esc(state.receiverName)},<br>tem uma história esperando por você.</h2>
-        <p>Preparada com carinho por ${esc(state.senderName)}.</p>
-        <button type="button" class="primary-btn story-start" id="startSurprise">Abrir surpresa e tocar música ❤️</button>
+        <h2>${esc(state.receiverName)},<br>você recebeu uma homenagem especial.</h2>
+        <p>Criada com carinho por <strong>${esc(state.senderName)}</strong>.</p>
+        <button type="button" class="primary-btn story-start" id="startSurprise">❤️ Abrir surpresa</button>
         ${(state.musicMode!=='youtube'&&currentTrack())?`<small>Trilha Eterniza: ${esc(currentTrack().title)}.</small>`:(state.youtubeId?'<small>A música tenta iniciar pelo YouTube nesse clique.</small>':'<small>Sem música informada nesta prévia.</small>')}
       </div>
       <div class="story-content" id="storyContent">
         <div class="story-topbar">
           <span>${esc(r.theme)}</span>
-          ${((state.musicMode!=='youtube'&&currentTrack())||state.youtubeId)?`<button type="button" id="playMusic" class="music-pill">▶ Música</button>`:''}
+          ${systemSettings.musicShowPlayer!==false&&((state.musicMode!=='youtube'&&currentTrack())||state.youtubeId)?`<button type="button" id="playMusic" class="music-pill">▶ Música</button>`:''}
         </div>
         <div class="eterniza-title-card">
           <div class="hourglass-mark">⌛</div>
@@ -780,6 +873,9 @@ function initStorytelling(){
     setTimeout(typeLetter,13800);
   };
   initMusic();
+  if(systemSettings.musicAutoplay===true){
+    setTimeout(()=>startMusic(false),350);
+  }
 }
 function runPrologue(){
   const lines=getStoryLines(state.recipient.id,state.receiverName,state.senderName);
@@ -856,13 +952,14 @@ function stopAppMusic(){
   }
 }
 function startAppMusic(){
+  if(systemSettings.musicEnabled===false) return false;
   stopAppMusic();
   const t=currentTrack();
   if(!t || !t.src) return false;
   activeAudio = new Audio(t.src);
   activeAudio.loop = true;
   activeAudio.volume = 0;
-  const fadeTarget = .68;
+  const fadeTarget = Math.min(1,Math.max(0,Number(systemSettings.musicDefaultVolume||68)/100));
   const fade = setInterval(()=>{
     if(!activeAudio){clearInterval(fade);return;}
     activeAudio.volume = Math.min(fadeTarget, activeAudio.volume + .035);
@@ -1488,6 +1585,7 @@ async function saveAdminPlans(){
     if(!res.ok || !data.ok) throw new Error(data.message || 'Erro ao salvar planos.');
     showModal('Planos atualizados','Os valores e promoções foram salvos com sucesso.');
     await loadDynamicPlans();
+loadDynamicSettings();
     await loadAdminPlans();
   }catch(error){
     showModal('Erro ao salvar planos', error.message || 'Não foi possível salvar as alterações.');
@@ -1804,6 +1902,7 @@ function requestCouponBeforePix(planSlug){
   showPublishCheckoutStep(`
     <div class="eterniza-pix-box">
       <h2>Finalizar pagamento</h2>
+      <p>${esc(systemSettings.checkoutMessage||'Finalize o pagamento para publicar sua homenagem.')}</p>
       <p>Plano <b>${esc(plan?.name||'')}</b> • <b>${esc(plan?.price||'')}</b></p>
       <div class="eterniza-coupon-box">
         <label class="eterniza-cpf-label" for="eternizaCouponInput">Tem um cupom?</label>
@@ -1881,6 +1980,9 @@ function requestCouponBeforePix(planSlug){
 }
 
 async function openPublishCheckout(){
+  if(systemSettings.pixEnabled===false){
+    return showModal('Pagamentos indisponíveis','O pagamento por PIX está temporariamente desativado.');
+  }
   const planSlug=String(state.plan?.slug||state.plan?.id||'').trim().toLowerCase();
 
   if(!planSlug){
@@ -2446,6 +2548,92 @@ $('loginBtn').onclick=()=>navigateTop('/login',true);
 
   wrapper.appendChild(select);
   wrapper.appendChild(button);
+})();
+
+
+(function injectStoryOpeningUx(){
+  if(document.getElementById('eternizaStoryOpeningUx')) return;
+  const style=document.createElement('style');
+  style.id='eternizaStoryOpeningUx';
+  style.textContent=`
+    body[data-screen="previewScreen"]{overflow-x:hidden}
+    .story-stage{min-height:100svh}
+    .story-open{
+      box-sizing:border-box!important;
+      min-height:100svh!important;
+      height:100svh!important;
+      max-height:100svh!important;
+      padding:max(18px,env(safe-area-inset-top)) 20px max(22px,env(safe-area-inset-bottom))!important;
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:center!important;
+      justify-content:center!important;
+      gap:clamp(8px,1.6vh,16px)!important;
+      overflow:hidden!important;
+      text-align:center!important;
+    }
+    .story-open .story-logo{
+      width:clamp(76px,14vh,130px)!important;
+      max-height:16vh!important;
+      object-fit:contain!important;
+      margin:0!important;
+    }
+    .story-open .badge{margin:0!important}
+    .story-open h2{
+      margin:0!important;
+      max-width:760px!important;
+      font-size:clamp(28px,5.2vw,58px)!important;
+      line-height:1.02!important;
+    }
+    .story-open p{
+      margin:0!important;
+      max-width:620px!important;
+      font-size:clamp(14px,2.2vw,19px)!important;
+      line-height:1.35!important;
+    }
+    .story-open .story-start{
+      flex:none!important;
+      min-height:56px!important;
+      margin:clamp(4px,1vh,10px) 0 0!important;
+      padding:0 clamp(22px,5vw,42px)!important;
+      font-size:clamp(15px,2.4vw,19px)!important;
+      position:relative!important;
+      z-index:5!important;
+      animation:eternizaOpenButtonIn .7s ease both,eternizaOpenButtonPulse 2.2s ease-in-out .8s infinite!important;
+      box-shadow:0 16px 42px rgba(239,189,82,.28)!important;
+    }
+    .story-open>small{
+      margin:0!important;
+      max-width:620px!important;
+      font-size:clamp(10px,1.7vw,13px)!important;
+      line-height:1.25!important;
+      opacity:.76!important;
+    }
+    @keyframes eternizaOpenButtonIn{
+      from{opacity:0;transform:translateY(14px) scale(.96)}
+      to{opacity:1;transform:translateY(0) scale(1)}
+    }
+    @keyframes eternizaOpenButtonPulse{
+      0%,100%{transform:scale(1);box-shadow:0 16px 42px rgba(239,189,82,.22)}
+      50%{transform:scale(1.035);box-shadow:0 20px 52px rgba(239,189,82,.38)}
+    }
+    @media(max-height:650px){
+      .story-open{gap:7px!important;padding-top:10px!important;padding-bottom:10px!important}
+      .story-open .story-logo{width:70px!important;max-height:12vh!important}
+      .story-open h2{font-size:clamp(24px,5vw,38px)!important}
+      .story-open .story-start{min-height:48px!important}
+      .story-open>small{display:none!important}
+    }
+    @media(max-width:600px){
+      .story-open{padding-left:16px!important;padding-right:16px!important}
+      .story-open h2{font-size:clamp(27px,9vw,42px)!important}
+      .story-open .story-start{width:min(100%,360px)!important}
+    }
+    @media(prefers-reduced-motion:reduce){
+      .story-open .story-start{animation:none!important}
+    }
+  `;
+  document.head.appendChild(style);
 })();
 
 $('createAccountBtn').onclick=createAccount;if($('logoutBtn')) $('logoutBtn').onclick=adminLogout;$('previewBtn').onclick=()=>{document.body.dataset.publicGift='false';buildPreview();};$('editBtn').onclick=()=>go('detailsScreen');$('publishBtn').textContent='❤️ Gerar PIX e publicar';$('publishBtn').onclick=openPublishCheckout;if($('newGiftBtn')) $('newGiftBtn').onclick=()=>go('recipientScreen'); if($('dashboardNewGiftBtn')) $('dashboardNewGiftBtn').onclick=()=>go('recipientScreen');$('backDetailsBtn').onclick=()=>go('recipientScreen');$('aiTextBtn').onclick=aiSuggestion;$('musicMode').onchange=()=>{stopAllMediaPlayback();state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();saveState();toggleYoutubeField();};document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{activeFilter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('active-filter'));b.classList.add('active-filter');renderOrders()});
