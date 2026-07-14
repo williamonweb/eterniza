@@ -394,6 +394,39 @@ export default function DashboardPage() {
     });
   }
 
+  async function shareTribute({ title, url }) {
+    if (!url) return;
+
+    const shareText = "Preparei uma homenagem muito especial para você ❤️";
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: title || "Uma homenagem especial",
+          text: shareText,
+          url,
+        });
+        return;
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+        console.warn("Compartilhamento nativo indisponível.", error);
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(`${shareText}\n\n${url}`);
+      setModal({
+        title: "Link copiado!",
+        text: "O compartilhamento nativo não está disponível neste navegador. O link foi copiado.",
+      });
+    } catch {
+      setModal({
+        title: "Compartilhar homenagem",
+        text: url,
+      });
+    }
+  }
+
   if (!mounted || loading) {
     return <main style={{ minHeight: "100vh", background: "#030606" }} />;
   }
@@ -467,6 +500,7 @@ export default function DashboardPage() {
                   tribute={tribute}
                   onPublish={() => startPublish(tribute)}
                   onCopy={copyText}
+                  onShare={shareTribute}
                   onDelete={() => setDeleteTarget(tribute)}
                   highlighted={purchaseSuccess?.tributeId === tribute.id}
                 />
@@ -490,6 +524,7 @@ export default function DashboardPage() {
           success={purchaseSuccess}
           onClose={() => setPurchaseSuccess(null)}
           onCopy={copyText}
+          onShare={shareTribute}
         />
       )}
 
@@ -541,7 +576,7 @@ function planClass(value) {
   return "premium";
 }
 
-function TributeCard({ tribute, onPublish, onCopy, onDelete, highlighted }) {
+function TributeCard({ tribute, onPublish, onCopy, onShare, onDelete, highlighted }) {
   const status = String(tribute.status || "DRAFT").toUpperCase();
   const isPublished = status === "PUBLISHED";
   const title = tribute.receiver_name || tribute.title || "História";
@@ -588,6 +623,12 @@ function TributeCard({ tribute, onPublish, onCopy, onDelete, highlighted }) {
             <a className="gold small" href={publicUrl} target="_blank" rel="noreferrer">
               Ver história
             </a>
+            <button
+              className="share-action"
+              onClick={() => onShare({ title, url: fullPublicUrl || publicUrl })}
+            >
+              📤 Compartilhar
+            </button>
             <button onClick={() => onCopy(fullPublicUrl || publicUrl)}>
               Copiar link
             </button>
@@ -774,7 +815,7 @@ function CheckoutModal({ checkout, plans, onClose, onCreatePayment }) {
   );
 }
 
-function PaymentSuccessModal({ success, onClose, onCopy }) {
+function PaymentSuccessModal({ success, onClose, onCopy, onShare }) {
   const publicUrl =
     success.publicUrl ||
     (success.slug ? `/presente/${success.slug}` : "");
@@ -784,9 +825,6 @@ function PaymentSuccessModal({ success, onClose, onCopy }) {
       ? `${window.location.origin}${publicUrl}`
       : publicUrl;
 
-  const whatsappText = encodeURIComponent(
-    `Olha a homenagem que preparei ❤️\n\n${fullUrl}`
-  );
 
   const confetti = Array.from({ length: 34 }, (_, index) => (
     <i
@@ -812,7 +850,7 @@ function PaymentSuccessModal({ success, onClose, onCopy }) {
         <h2>Sua homenagem está no ar!</h2>
         <p>
           <strong>{success.title || "Sua história"}</strong> foi publicada com sucesso.
-          Agora é só abrir, copiar o link ou compartilhar pelo WhatsApp.
+          Agora é só abrir, compartilhar ou copiar o link.
         </p>
 
         <div className="success-actions">
@@ -829,14 +867,17 @@ function PaymentSuccessModal({ success, onClose, onCopy }) {
           )}
 
           {fullUrl && (
-            <a
-              className="whatsapp-action"
-              href={`https://wa.me/?text=${whatsappText}`}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              className="native-share-action"
+              onClick={() =>
+                onShare({
+                  title: success.title || "Uma homenagem especial",
+                  url: fullUrl,
+                })
+              }
             >
-              Compartilhar no WhatsApp
-            </a>
+              📤 Compartilhar homenagem
+            </button>
           )}
         </div>
 
@@ -1040,7 +1081,7 @@ textarea{width:100%;min-height:96px;border-radius:16px;border:1px solid rgba(239
 .success-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:22px}
 .success-actions a,.success-actions button{min-height:50px;border-radius:14px;padding:12px 15px;text-decoration:none;display:flex;align-items:center;justify-content:center;font-weight:1000;cursor:pointer}
 .success-actions button{border:1px solid rgba(239,189,82,.24);background:rgba(255,255,255,.06);color:#fff}
-.success-actions .whatsapp-action{grid-column:1/-1;background:#1fa855;color:#fff;border:1px solid rgba(111,255,166,.28)}
+.success-actions .native-share-action{grid-column:1/-1;background:linear-gradient(135deg,#356bcf,#7cb5ff);color:#fff;border:1px solid rgba(124,181,255,.3)}
 .success-close{margin-top:13px;border:0;background:transparent;color:#cdbd9f;font-weight:900;cursor:pointer;padding:10px}
 @keyframes successPop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:1}}
 @keyframes confettiFall{0%{transform:translateY(-20px) rotate(var(--rotate));opacity:0}10%{opacity:1}100%{transform:translateY(105vh) rotate(calc(var(--rotate) + 540deg));opacity:.9}}

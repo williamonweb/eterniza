@@ -24,17 +24,17 @@ export const metadata = {
     title: 'Eterniza | Onde Cada História Vive Para Sempre',
     description: 'Transforme fotos, música e palavras em uma homenagem emocionante e compartilhe um momento inesquecível com quem você ama.',
     images: [{
-      url: '/eterniza/assets/brand/hero-couple.jpg',
+      url: '/eterniza/assets/brand/logo-eterniza.png',
       width: 1200,
       height: 630,
-      alt: 'Eterniza — homenagens que vivem para sempre'
+      alt: 'Logo Eterniza — onde cada história vive para sempre'
     }]
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Eterniza | Onde Cada História Vive Para Sempre',
     description: 'Transforme fotos, música e palavras em uma homenagem emocionante.',
-    images: ['/eterniza/assets/brand/hero-couple.jpg']
+    images: ['/eterniza/assets/brand/logo-eterniza.png']
   },
   robots: { index: true, follow: true },
   other: { 'theme-color': '#050706' }

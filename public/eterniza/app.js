@@ -1834,7 +1834,7 @@ function checkoutStyle(){
       .eterniza-success-screen:after{background:#42d47d;right:-70px;bottom:-90px}
       .eterniza-success-sub{color:#8dffb2!important;text-transform:uppercase;letter-spacing:.12em;font-size:12px!important;font-weight:1000}
       .eterniza-success-countdown{margin-top:16px;color:#cdbd9f!important;font-size:14px!important}
-      .eterniza-whatsapp-btn{grid-column:1/-1;background:#1fa855!important;color:#fff!important}
+      .eterniza-share-btn{grid-column:1/-1;background:#1fa855!important;color:#fff!important}
       .eterniza-confetti{position:fixed;inset:0;pointer-events:none;z-index:100000;overflow:hidden}
       .eterniza-confetti i{position:absolute;top:-30px;width:10px;height:18px;border-radius:3px;animation:eternizaConfetti 2.8s ease-in forwards}
 
@@ -2060,6 +2060,7 @@ function showCardSuccess(tributeId, fallbackSlug){
       <div class="eterniza-success-actions">
         <button class="eterniza-pay-btn" type="button" id="openCardPublishedStory">Abrir minha história</button>
         <button class="eterniza-pay-secondary" type="button" id="copyCardPublishedStory">Copiar link</button>
+        <button class="eterniza-pay-btn eterniza-share-btn" type="button" id="shareCardPublishedStory">📤 Compartilhar homenagem</button>
       </div>
     </div>
   `);
@@ -2311,6 +2312,34 @@ function launchPaymentConfetti(){
   setTimeout(()=>field.remove(),3600);
 }
 
+
+async function shareEternizaTribute({title,url}){
+  const safeUrl=String(url||'').trim();
+  if(!safeUrl) return false;
+
+  const shareTitle=String(title||'Uma homenagem especial').trim();
+  const shareText='Preparei uma homenagem muito especial para você ❤️';
+
+  if(navigator.share){
+    try{
+      await navigator.share({title:shareTitle,text:shareText,url:safeUrl});
+      return true;
+    }catch(error){
+      if(error?.name==='AbortError') return false;
+      console.warn('Compartilhamento nativo indisponível.',error);
+    }
+  }
+
+  try{
+    await navigator.clipboard.writeText(`${shareText}\n\n${safeUrl}`);
+    showModal('Link copiado','O compartilhamento nativo não está disponível neste navegador. O link foi copiado.');
+    return true;
+  }catch(error){
+    window.prompt('Copie o link da homenagem:',safeUrl);
+    return false;
+  }
+}
+
 function finishPaymentAndGoToDashboard({tributeId,slug,publicUrl,title}){
   const successData={
     tributeId:tributeId||'',
@@ -2367,7 +2396,7 @@ function startPublishStatusPolling(tributeId, fallbackSlug, asaasId=''){
             <div class="eterniza-success-actions">
               <button class="eterniza-pay-btn" type="button" id="openPublishedStory">Ver história</button>
               <button class="eterniza-pay-secondary" type="button" id="copyPublishedStory">Copiar link</button>
-              <button class="eterniza-pay-btn eterniza-whatsapp-btn" type="button" id="sharePublishedStory">Compartilhar no WhatsApp</button>
+              <button class="eterniza-pay-btn eterniza-share-btn" type="button" id="sharePublishedStory">📤 Compartilhar homenagem</button>
             </div>
             <p class="eterniza-success-countdown">Você será levado ao seu painel em <b id="eternizaRedirectSeconds">5</b> segundos.</p>
           </div>
@@ -2380,19 +2409,37 @@ function startPublishStatusPolling(tributeId, fallbackSlug, asaasId=''){
           title:data.tributeTitle||state.receiverName||'Sua homenagem'
         };
 
-        document.getElementById('openPublishedStory')?.addEventListener('click',()=>navigateTop(url,false));
-        document.getElementById('copyPublishedStory')?.addEventListener('click',event=>{
-          navigator.clipboard?.writeText(fullUrl);
-          event.currentTarget.textContent='Link copiado!';
+        let countdown=null;
+
+        document.getElementById('openPublishedStory')?.addEventListener('click',()=>{
+          if(countdown) clearInterval(countdown);
+          navigateTop(url,false);
         });
-        document.getElementById('sharePublishedStory')?.addEventListener('click',()=>{
-          const text=encodeURIComponent(`Olha a homenagem que preparei ❤️\n\n${fullUrl}`);
-          window.open(`https://wa.me/?text=${text}`,'_blank','noopener,noreferrer');
+        document.getElementById('copyPublishedStory')?.addEventListener('click',async event=>{
+          if(countdown) clearInterval(countdown);
+          await navigator.clipboard?.writeText(fullUrl);
+          event.currentTarget.textContent='✓ Link copiado';
+        });
+        document.getElementById('sharePublishedStory')?.addEventListener('click',async event=>{
+          if(countdown) clearInterval(countdown);
+          const button=event.currentTarget;
+          const original=button.textContent;
+          button.textContent='Abrindo compartilhamento...';
+          button.disabled=true;
+          try{
+            await shareEternizaTribute({
+              title:data.tributeTitle||state.receiverName||'Uma homenagem especial',
+              url:fullUrl
+            });
+          }finally{
+            button.disabled=false;
+            button.textContent=original;
+          }
         });
 
         let seconds=5;
         const secondsEl=document.getElementById('eternizaRedirectSeconds');
-        const countdown=setInterval(()=>{
+        countdown=setInterval(()=>{
           seconds-=1;
           if(secondsEl) secondsEl.textContent=String(Math.max(0,seconds));
           if(seconds<=0){
