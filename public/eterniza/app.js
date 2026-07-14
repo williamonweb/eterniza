@@ -2342,6 +2342,84 @@ function startPublishStatusPolling(tributeId, fallbackSlug, asaasId=''){
     .eterniza-music-toast{position:fixed;right:22px;bottom:22px;z-index:99999;display:flex;align-items:center;gap:10px;padding:14px 18px;border-radius:14px;background:#10251a;color:#eafff0;border:1px solid rgba(119,217,160,.45);box-shadow:0 18px 55px rgba(0,0,0,.45);opacity:0;transform:translateY(18px);pointer-events:none;transition:.25s ease}
     .eterniza-music-toast.show{opacity:1;transform:translateY(0)}
     .eterniza-music-toast span{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#77d9a0;color:#082012;font-weight:1000}
+
+    /* Modal padrão com fundo sólido e contraste alto */
+    #modal{background:rgba(0,0,0,.82)!important;backdrop-filter:blur(10px)!important;-webkit-backdrop-filter:blur(10px)!important}
+    #modal>div,#modal .modal-card,#modal .modal-content,#modal .modal-box{
+      background:linear-gradient(145deg,#171c1a,#0d1210)!important;
+      border:1px solid rgba(239,189,82,.34)!important;
+      box-shadow:0 28px 90px rgba(0,0,0,.68),0 0 0 1px rgba(255,255,255,.025)!important;
+      opacity:1!important;
+      color:#fff!important;
+    }
+    #modalTitle{color:#fff8ea!important;text-shadow:none!important}
+    #modalText{color:#e7dfd2!important;opacity:1!important;line-height:1.65!important}
+    #modalOk{
+      display:flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      min-width:150px!important;
+      min-height:48px!important;
+      margin:22px auto 0!important;
+      border:0!important;
+      border-radius:14px!important;
+      background:linear-gradient(135deg,#c99337,#f7dc82)!important;
+      color:#171005!important;
+      font-weight:1000!important;
+      box-shadow:0 12px 30px rgba(239,189,82,.2)!important;
+      cursor:pointer!important;
+    }
+
+    /* Organização do seletor e botão da sugestão de texto */
+    .eterniza-ai-controls{
+      display:grid!important;
+      grid-template-columns:minmax(0,1fr) minmax(210px,auto)!important;
+      gap:14px!important;
+      align-items:stretch!important;
+      width:100%!important;
+      margin-top:8px!important;
+    }
+    .eterniza-ai-controls #aiTextStyle{
+      width:100%!important;
+      min-width:0!important;
+      min-height:54px!important;
+      margin:0!important;
+      padding:0 16px!important;
+      border:1px solid rgba(239,189,82,.22)!important;
+      border-radius:15px!important;
+      background:#232826!important;
+      color:#fff!important;
+      font:inherit!important;
+      outline:none!important;
+      box-sizing:border-box!important;
+    }
+    .eterniza-ai-controls #aiTextStyle:focus{
+      border-color:#efbd52!important;
+      box-shadow:0 0 0 3px rgba(239,189,82,.12)!important;
+    }
+    .eterniza-ai-controls #aiTextBtn{
+      min-height:54px!important;
+      margin:0!important;
+      padding:0 22px!important;
+      border:0!important;
+      border-radius:15px!important;
+      background:linear-gradient(135deg,#c99337,#f7dc82)!important;
+      color:#171005!important;
+      font-weight:1000!important;
+      white-space:nowrap!important;
+      box-shadow:0 12px 30px rgba(239,189,82,.16)!important;
+      cursor:pointer!important;
+      transition:transform .2s ease,box-shadow .2s ease!important;
+    }
+    .eterniza-ai-controls #aiTextBtn:hover{
+      transform:translateY(-2px)!important;
+      box-shadow:0 16px 36px rgba(239,189,82,.24)!important;
+    }
+
+    @media(max-width:700px){
+      .eterniza-ai-controls{grid-template-columns:1fr!important}
+      .eterniza-ai-controls #aiTextBtn{width:100%!important}
+    }
     @media(max-width:600px){.youtube-selected-actions{width:100%}.youtube-selected-actions button{flex:1}.eterniza-music-toast{left:16px;right:16px;bottom:16px}}
   `;
   document.head.appendChild(style);
@@ -2353,6 +2431,23 @@ if($('demoOpenBtn')) { $('demoOpenBtn').setAttribute('href','/presente/demo-mari
 $('showLoginBtn').onclick=()=>setAuthMode('login');
 $('showCreateBtn').onclick=()=>setAuthMode('create');
 $('loginBtn').onclick=()=>navigateTop('/login',true);
+(function organizeAiTextControls(){
+  const select=$('aiTextStyle');
+  const button=$('aiTextBtn');
+  if(!select || !button) return;
+
+  let wrapper=document.getElementById('eternizaAiControls');
+  if(!wrapper){
+    wrapper=document.createElement('div');
+    wrapper.id='eternizaAiControls';
+    wrapper.className='eterniza-ai-controls';
+    select.parentNode.insertBefore(wrapper,select);
+  }
+
+  wrapper.appendChild(select);
+  wrapper.appendChild(button);
+})();
+
 $('createAccountBtn').onclick=createAccount;if($('logoutBtn')) $('logoutBtn').onclick=adminLogout;$('previewBtn').onclick=()=>{document.body.dataset.publicGift='false';buildPreview();};$('editBtn').onclick=()=>go('detailsScreen');$('publishBtn').textContent='❤️ Gerar PIX e publicar';$('publishBtn').onclick=openPublishCheckout;if($('newGiftBtn')) $('newGiftBtn').onclick=()=>go('recipientScreen'); if($('dashboardNewGiftBtn')) $('dashboardNewGiftBtn').onclick=()=>go('recipientScreen');$('backDetailsBtn').onclick=()=>go('recipientScreen');$('aiTextBtn').onclick=aiSuggestion;$('musicMode').onchange=()=>{stopAllMediaPlayback();state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();saveState();toggleYoutubeField();};document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{activeFilter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('active-filter'));b.classList.add('active-filter');renderOrders()});
 setupAuthAndYoutubeHelpers();renderRecipients();renderPlans();loadDynamicPlans();if(state.userEmail)$('email').value=state.userEmail;
 window.addEventListener('hashchange',()=>{stopAllMediaPlayback();openRoute();});
