@@ -861,16 +861,48 @@ function initStorytelling(){
   let started=false;
   start.onclick=()=>{
     if(started) return; started=true;
+
+    start.disabled=true;
+    start.setAttribute('aria-busy','true');
+
+    const prologue=$('storyPrologue');
+    const scrollToPrologue=()=>{
+      try{
+        if(prologue){
+          prologue.scrollIntoView({behavior:'smooth',block:'start'});
+        }else if(content){
+          content.scrollIntoView({behavior:'smooth',block:'start'});
+        }
+      }catch(error){
+        if(prologue){
+          window.scrollTo(0,prologue.getBoundingClientRect().top + window.scrollY);
+        }
+      }
+    };
+
     startMusic(false);
     open.classList.add('hide');
-    content.classList.add('show');
-    setTimeout(()=>open.style.display='none',900);
-    runPrologue();
+
     setTimeout(()=>{
-      runCineSlides();
-      scrollStoryToPhotos();
-    },11200);
-    setTimeout(typeLetter,13800);
+      content.classList.add('show');
+
+      requestAnimationFrame(()=>{
+        scrollToPrologue();
+        setTimeout(scrollToPrologue,220);
+      });
+
+      setTimeout(()=>{
+        open.style.display='none';
+        runPrologue();
+
+        setTimeout(()=>{
+          runCineSlides();
+          scrollStoryToPhotos();
+        },11200);
+
+        setTimeout(typeLetter,13800);
+      },520);
+    },420);
   };
   initMusic();
   if(systemSettings.musicAutoplay===true){
@@ -2676,8 +2708,28 @@ $('loginBtn').onclick=()=>navigateTop('/login',true);
       .story-open h2{font-size:clamp(27px,9vw,42px)!important}
       .story-open .story-start{width:min(100%,360px)!important}
     }
+    .story-content{
+      scroll-margin-top:0!important;
+    }
+    .story-prologue{
+      scroll-margin-top:0!important;
+    }
+    .story-open.hide{
+      opacity:0!important;
+      transform:scale(.985)!important;
+      pointer-events:none!important;
+      transition:opacity .42s ease,transform .42s ease!important;
+    }
+    .story-content.show{
+      animation:eternizaStoryContentIn .55s ease both!important;
+    }
+    @keyframes eternizaStoryContentIn{
+      from{opacity:0;transform:translateY(14px)}
+      to{opacity:1;transform:translateY(0)}
+    }
     @media(prefers-reduced-motion:reduce){
       .story-open .story-start{animation:none!important}
+      .story-open.hide,.story-content.show{animation:none!important;transition:none!important}
     }
   `;
   document.head.appendChild(style);
