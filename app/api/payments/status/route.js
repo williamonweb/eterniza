@@ -52,14 +52,24 @@ export async function GET(req) {
     if (paymentStatus === "APPROVED") {
       await prisma.tribute.update({
         where: { id: existingPayment.tributeId },
-        data: { status: "PUBLISHED" },
+        data: {
+          status: "PUBLISHED",
+          publishedAt: existingPayment.tribute.publishedAt || new Date(),
+        },
       });
       published = true;
     }
 
     const tribute = await prisma.tribute.findUnique({
       where: { id: existingPayment.tributeId },
-      select: { id: true, slug: true, status: true },
+      select: {
+        id: true,
+        slug: true,
+        status: true,
+        receiverName: true,
+        title: true,
+        publishedAt: true,
+      },
     });
 
     return NextResponse.json({
@@ -71,6 +81,7 @@ export async function GET(req) {
       published,
       tribute,
       publicUrl: tribute?.slug ? `/presente/${tribute.slug}` : null,
+      tributeTitle: tribute?.receiverName || tribute?.title || "Sua homenagem",
     });
   } catch (error) {
     console.error("Erro em GET /api/payments/status:", error);

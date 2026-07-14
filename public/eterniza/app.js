@@ -1717,6 +1717,16 @@ function checkoutStyle(){
       .eterniza-loading-orb{width:74px;height:74px;border-radius:50%;margin:4px auto 18px;border:4px solid rgba(246,207,114,.18);border-top-color:#f6cf72;border-right-color:#f6cf72;animation:eternizaSpin 1s linear infinite;box-shadow:0 0 40px rgba(246,207,114,.18)}
       .eterniza-success-mark{width:82px;height:82px;border-radius:50%;margin:0 auto 16px;background:linear-gradient(135deg,#42d47d,#b9ffcf);color:#07120b;display:flex;align-items:center;justify-content:center;font-size:44px;font-weight:1000;box-shadow:0 0 42px rgba(66,212,125,.32);animation:eternizaPop .55s ease both}
       .eterniza-success-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+      .eterniza-success-screen{position:relative;overflow:hidden;padding:18px 0}
+      .eterniza-success-screen:before,.eterniza-success-screen:after{content:"";position:absolute;width:180px;height:180px;border-radius:50%;filter:blur(35px);opacity:.28;pointer-events:none}
+      .eterniza-success-screen:before{background:#efbd52;left:-70px;top:-80px}
+      .eterniza-success-screen:after{background:#42d47d;right:-70px;bottom:-90px}
+      .eterniza-success-sub{color:#8dffb2!important;text-transform:uppercase;letter-spacing:.12em;font-size:12px!important;font-weight:1000}
+      .eterniza-success-countdown{margin-top:16px;color:#cdbd9f!important;font-size:14px!important}
+      .eterniza-whatsapp-btn{grid-column:1/-1;background:#1fa855!important;color:#fff!important}
+      .eterniza-confetti{position:fixed;inset:0;pointer-events:none;z-index:100000;overflow:hidden}
+      .eterniza-confetti i{position:absolute;top:-30px;width:10px;height:18px;border-radius:3px;animation:eternizaConfetti 2.8s ease-in forwards}
+
       .eterniza-method-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:24px 0}
       .eterniza-method-card{border:1px solid rgba(239,189,82,.24);background:rgba(0,0,0,.20);border-radius:20px;padding:20px;text-align:left;color:#fff;cursor:pointer}
       .eterniza-method-card:hover{border-color:rgba(239,189,82,.62)}
@@ -1727,6 +1737,7 @@ function checkoutStyle(){
       .eterniza-back-row{display:flex;justify-content:flex-start;margin-bottom:16px}
       @keyframes eternizaSpin{to{transform:rotate(360deg)}}
       @keyframes eternizaPop{0%{transform:scale(.65);opacity:0}70%{transform:scale(1.08);opacity:1}100%{transform:scale(1)}}
+      @keyframes eternizaConfetti{0%{transform:translateY(-20px) rotate(0);opacity:0}10%{opacity:1}100%{transform:translateY(108vh) rotate(620deg);opacity:.9}}
       @media(max-width:850px){.eterniza-plan-grid{grid-template-columns:1fr}.eterniza-pay-modal{padding:24px}.eterniza-pay-modal h2{font-size:34px}}
     </style>
   `;
@@ -2042,7 +2053,11 @@ async function createPreviewPix(planSlug,cpfCnpj='',billingAlreadyChecked=false)
       };
     }
 
-    startPublishStatusPolling(tribute.id, tribute.slug || state.slug);
+    startPublishStatusPolling(
+      tribute.id,
+      tribute.slug || state.slug,
+      payment.asaasId || payment.mercadoPagoId || payment.id || ""
+    );
   }catch(error){
     showPublishCheckoutStep(`
       <div class="eterniza-pix-box">
@@ -2058,43 +2073,126 @@ async function createPreviewPix(planSlug,cpfCnpj='',billingAlreadyChecked=false)
   }
 }
 
-function startPublishStatusPolling(tributeId, fallbackSlug){
+function launchPaymentConfetti(){
+  const old=document.getElementById('eternizaPaymentConfetti');
+  if(old) old.remove();
+
+  const field=document.createElement('div');
+  field.id='eternizaPaymentConfetti';
+  field.className='eterniza-confetti';
+
+  for(let i=0;i<38;i++){
+    const piece=document.createElement('i');
+    piece.style.left=`${(i*37)%100}%`;
+    piece.style.background=`hsl(${(i*53)%360} 82% 66%)`;
+    piece.style.animationDelay=`${(i%9)*.08}s`;
+    piece.style.transform=`rotate(${(i*41)%360}deg)`;
+    field.appendChild(piece);
+  }
+
+  document.body.appendChild(field);
+  setTimeout(()=>field.remove(),3600);
+}
+
+function finishPaymentAndGoToDashboard({tributeId,slug,publicUrl,title}){
+  const successData={
+    tributeId:tributeId||'',
+    slug:slug||'',
+    publicUrl:publicUrl||(slug?`/presente/${slug}`:''),
+    title:title||state.receiverName||'Sua homenagem'
+  };
+
+  try{
+    sessionStorage.setItem('eternizaPaymentSuccess',JSON.stringify(successData));
+  }catch(error){
+    console.warn('Não foi possível guardar o aviso de pagamento.',error);
+  }
+
+  const params=new URLSearchParams({
+    payment:'success',
+    tributeId:successData.tributeId,
+    slug:successData.slug
+  });
+
+  navigateTop(`/dashboard?${params.toString()}`,true);
+}
+
+function startPublishStatusPolling(tributeId, fallbackSlug, asaasId=''){
   if(publishPollTimer) clearInterval(publishPollTimer);
-  publishPollTimer = setInterval(async()=>{
+
+  const checkPayment=async()=>{
     try{
-      const res = await fetch('/api/tributes/list');
-      const data = await res.json();
-      if(!data.ok || !Array.isArray(data.tributes)) return;
-      const tribute = data.tributes.find(t => t.id === tributeId);
-      if(!tribute) return;
-      if(String(tribute.status).toUpperCase() === 'PUBLISHED'){
-        clearInterval(publishPollTimer);
-        publishPollTimer = null;
-        const url = tribute.public_url || tribute.publicUrl || (tribute.slug ? `/presente/${tribute.slug}` : (fallbackSlug ? `/presente/${fallbackSlug}` : '/dashboard'));
+      const params=new URLSearchParams({
+        tributeId:String(tributeId||'')
+      });
+      if(asaasId) params.set('asaasId',String(asaasId));
+
+      const res=await fetch(`/api/payments/status?${params.toString()}`,{cache:'no-store'});
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok || !data.ok) return;
+
+      if(data.paymentStatus==='APPROVED' || data.published){
+        if(publishPollTimer) clearInterval(publishPollTimer);
+        publishPollTimer=null;
+
+        const slug=data.tribute?.slug || fallbackSlug || '';
+        const url=data.publicUrl || (slug?`/presente/${slug}`:'/dashboard');
+        const fullUrl=url.startsWith('http')?url:(location.origin+url);
+
+        launchPaymentConfetti();
+
         showPublishCheckoutStep(`
-          <div class="eterniza-pix-box">
+          <div class="eterniza-pix-box eterniza-success-screen">
             <div class="eterniza-success-mark">✓</div>
-            <h2>Pagamento aprovado!</h2>
-            <p>Sua história agora vive para sempre.</p>
+            <p class="eterniza-success-sub">Pagamento confirmado</p>
+            <h2>Sua homenagem está no ar!</h2>
+            <p><b>${esc(data.tributeTitle||state.receiverName||'Sua história')}</b> foi publicada com sucesso.</p>
             <div class="eterniza-success-actions">
-              <button class="eterniza-pay-btn" type="button" id="openPublishedStory">Abrir minha história</button>
+              <button class="eterniza-pay-btn" type="button" id="openPublishedStory">Ver história</button>
               <button class="eterniza-pay-secondary" type="button" id="copyPublishedStory">Copiar link</button>
+              <button class="eterniza-pay-btn eterniza-whatsapp-btn" type="button" id="sharePublishedStory">Compartilhar no WhatsApp</button>
             </div>
+            <p class="eterniza-success-countdown">Você será levado ao seu painel em <b id="eternizaRedirectSeconds">5</b> segundos.</p>
           </div>
         `);
-        const open = document.getElementById('openPublishedStory');
-        if(open) open.onclick = () => navigateTop(url, false);
-        const copy = document.getElementById('copyPublishedStory');
-        if(copy) copy.onclick = () => {
-          const fullUrl = url.startsWith('http') ? url : (location.origin + url);
-          navigator.clipboard?.writeText(fullUrl);
-          copy.textContent = 'Link copiado!';
-          setTimeout(()=>copy.textContent='Copiar link',1800);
+
+        const successData={
+          tributeId:data.tribute?.id||tributeId,
+          slug,
+          publicUrl:url,
+          title:data.tributeTitle||state.receiverName||'Sua homenagem'
         };
+
+        document.getElementById('openPublishedStory')?.addEventListener('click',()=>navigateTop(url,false));
+        document.getElementById('copyPublishedStory')?.addEventListener('click',event=>{
+          navigator.clipboard?.writeText(fullUrl);
+          event.currentTarget.textContent='Link copiado!';
+        });
+        document.getElementById('sharePublishedStory')?.addEventListener('click',()=>{
+          const text=encodeURIComponent(`Olha a homenagem que preparei ❤️\n\n${fullUrl}`);
+          window.open(`https://wa.me/?text=${text}`,'_blank','noopener,noreferrer');
+        });
+
+        let seconds=5;
+        const secondsEl=document.getElementById('eternizaRedirectSeconds');
+        const countdown=setInterval(()=>{
+          seconds-=1;
+          if(secondsEl) secondsEl.textContent=String(Math.max(0,seconds));
+          if(seconds<=0){
+            clearInterval(countdown);
+            finishPaymentAndGoToDashboard(successData);
+          }
+        },1000);
       }
-    }catch(e){}
-  }, 5000);
+    }catch(error){
+      console.warn('Não foi possível consultar o pagamento.',error);
+    }
+  };
+
+  checkPayment();
+  publishPollTimer=setInterval(checkPayment,3000);
 }
+
 /* ===== Fim Checkout PIX direto na prévia ===== */
 
 

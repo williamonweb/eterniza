@@ -64,7 +64,10 @@ export async function POST(req) {
     if (tributeId && isPaidAsaasEvent(event, status)) {
       await prisma.tribute.update({
         where: { id: tributeId },
-        data: { status: "PUBLISHED" },
+        data: {
+          status: "PUBLISHED",
+          publishedAt: new Date(),
+        },
       });
     }
 

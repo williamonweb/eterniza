@@ -67,6 +67,7 @@ export default function DashboardPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [plans, setPlans] = useState(DEFAULT_PLANS);
+  const [purchaseSuccess, setPurchaseSuccess] = useState(null);
 
   async function load() {
     try {
@@ -112,6 +113,110 @@ export default function DashboardPage() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const querySuccess = params.get("payment") === "success";
+    let storedSuccess = null;
+
+    try {
+      storedSuccess = JSON.parse(
+        window.sessionStorage.getItem("eternizaPaymentSuccess") || "null"
+      );
+    } catch {
+      storedSuccess = null;
+    }
+
+    if (querySuccess || storedSuccess) {
+      const successData = {
+        tributeId: params.get("tributeId") || storedSuccess?.tributeId || "",
+        slug: params.get("slug") || storedSuccess?.slug || "",
+        publicUrl:
+          storedSuccess?.publicUrl ||
+          (params.get("slug") ? `/presente/${params.get("slug")}` : ""),
+        title: storedSuccess?.title || "Sua homenagem",
+      };
+
+      setPurchaseSuccess(successData);
+      window.sessionStorage.removeItem("eternizaPaymentSuccess");
+
+      if (querySuccess) {
+        window.history.replaceState({}, "", "/dashboard");
+      }
+
+      setTimeout(() => {
+        const card = document.querySelector(
+          `[data-tribute-id="${CSS.escape(successData.tributeId || "")}"]`
+        );
+        card?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 700);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (checkout?.step !== "pix" || !checkout?.payment) return;
+
+    const asaasId =
+      checkout.payment.asaasId ||
+      checkout.payment.mercadoPagoId ||
+      checkout.payment.id;
+
+    if (!asaasId) return;
+
+    let stopped = false;
+    let timer = null;
+
+    async function checkPayment() {
+      try {
+        const params = new URLSearchParams({
+          asaasId: String(asaasId),
+          tributeId: String(checkout.tribute?.id || ""),
+        });
+
+        const response = await fetch(`/api/payments/status?${params.toString()}`, {
+          cache: "no-store",
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (
+          !stopped &&
+          response.ok &&
+          data.ok &&
+          (data.paymentStatus === "APPROVED" || data.published)
+        ) {
+          stopped = true;
+          if (timer) clearInterval(timer);
+
+          const successData = {
+            tributeId: data.tribute?.id || checkout.tribute?.id || "",
+            slug: data.tribute?.slug || "",
+            publicUrl: data.publicUrl || "",
+            title:
+              data.tributeTitle ||
+              checkout.tribute?.receiver_name ||
+              checkout.tribute?.title ||
+              "Sua homenagem",
+          };
+
+          setCheckout({ step: "success", tribute: checkout.tribute, success: successData });
+          setPurchaseSuccess(successData);
+          await load();
+        }
+      } catch (error) {
+        console.warn("Não foi possível consultar o pagamento.", error);
+      }
+    }
+
+    checkPayment();
+    timer = setInterval(checkPayment, 3000);
+
+    return () => {
+      stopped = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [checkout?.step, checkout?.payment?.id]);
 
   const stats = useMemo(() => {
     const total = tributes.length;
@@ -355,6 +460,7 @@ export default function DashboardPage() {
                   onPublish={() => startPublish(tribute)}
                   onCopy={copyText}
                   onDelete={() => setDeleteTarget(tribute)}
+                  highlighted={purchaseSuccess?.tributeId === tribute.id}
                 />
               ))}
             </div>
@@ -368,6 +474,14 @@ export default function DashboardPage() {
           plans={plans}
           onClose={() => setCheckout(null)}
           onCreatePayment={createPayment}
+        />
+      )}
+
+      {purchaseSuccess && (
+        <PaymentSuccessModal
+          success={purchaseSuccess}
+          onClose={() => setPurchaseSuccess(null)}
+          onCopy={copyText}
         />
       )}
 
@@ -419,7 +533,7 @@ function planClass(value) {
   return "premium";
 }
 
-function TributeCard({ tribute, onPublish, onCopy, onDelete }) {
+function TributeCard({ tribute, onPublish, onCopy, onDelete, highlighted }) {
   const status = String(tribute.status || "DRAFT").toUpperCase();
   const isPublished = status === "PUBLISHED";
   const title = tribute.receiver_name || tribute.title || "História";
@@ -435,11 +549,12 @@ function TributeCard({ tribute, onPublish, onCopy, onDelete }) {
       : publicUrl;
 
   return (
-    <article className="tribute-card">
+    <article className={`tribute-card ${highlighted ? "newly-published" : ""}`} data-tribute-id={tribute.id}>
       <div className="image">
         <img src={thumbnail} alt={title} />
         <div className="image-shade"></div>
         <span className={`pill ${isPublished ? "published" : ""}`}>{isPublished ? "Publicada" : "Rascunho"}</span>
+        {highlighted && <span className="new-badge">✨ Nova</span>}
         <span className={`plan-pill ${planClass(planSlug)}`}>{planName}</span>
       </div>
 
@@ -551,6 +666,88 @@ function CheckoutModal({ checkout, plans, onClose, onCreatePayment }) {
             </button>
           </div>
         )}
+        {checkout.step === "success" && (
+          <div className="payment-state checkout-success">
+            <div className="success-check">✓</div>
+            <h2>Pagamento confirmado!</h2>
+            <p>Sua homenagem foi publicada e já está pronta para compartilhar.</p>
+            <div className="redirect-note">Atualizando seu painel...</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PaymentSuccessModal({ success, onClose, onCopy }) {
+  const publicUrl =
+    success.publicUrl ||
+    (success.slug ? `/presente/${success.slug}` : "");
+
+  const fullUrl =
+    publicUrl && typeof window !== "undefined"
+      ? `${window.location.origin}${publicUrl}`
+      : publicUrl;
+
+  const whatsappText = encodeURIComponent(
+    `Olha a homenagem que preparei ❤️\n\n${fullUrl}`
+  );
+
+  const confetti = Array.from({ length: 34 }, (_, index) => (
+    <i
+      key={index}
+      style={{
+        "--x": `${(index * 37) % 100}%`,
+        "--delay": `${(index % 8) * 0.08}s`,
+        "--rotate": `${(index * 43) % 360}deg`,
+      }}
+    />
+  ));
+
+  return (
+    <div className="modal-overlay success-overlay">
+      <div className="confetti-field" aria-hidden="true">{confetti}</div>
+
+      <div className="info-modal payment-success-modal">
+        <div className="success-ring">
+          <span>✓</span>
+        </div>
+
+        <span className="success-eyebrow">Pagamento confirmado</span>
+        <h2>Sua homenagem está no ar!</h2>
+        <p>
+          <strong>{success.title || "Sua história"}</strong> foi publicada com sucesso.
+          Agora é só abrir, copiar o link ou compartilhar pelo WhatsApp.
+        </p>
+
+        <div className="success-actions">
+          {publicUrl && (
+            <a className="gold" href={publicUrl} target="_blank" rel="noreferrer">
+              Ver história
+            </a>
+          )}
+
+          {fullUrl && (
+            <button onClick={() => onCopy(fullUrl)}>
+              Copiar link
+            </button>
+          )}
+
+          {fullUrl && (
+            <a
+              className="whatsapp-action"
+              href={`https://wa.me/?text=${whatsappText}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Compartilhar no WhatsApp
+            </a>
+          )}
+        </div>
+
+        <button className="success-close" onClick={onClose}>
+          Continuar no painel
+        </button>
       </div>
     </div>
   );
@@ -729,6 +926,30 @@ textarea{width:100%;min-height:96px;border-radius:16px;border:1px solid rgba(239
 .stats{grid-template-columns:repeat(4,1fr)}.stat{display:flex;align-items:center;gap:14px}.stat-icon{width:48px;height:48px;border-radius:15px;display:grid;place-items:center;background:rgba(239,189,82,.1);border:1px solid rgba(239,189,82,.18);font-size:22px}.stat small{display:block;color:#a99f90;margin-top:3px}
 .tribute-card{padding:0;overflow:hidden;transition:.25s}.tribute-card:hover{transform:translateY(-4px);border-color:rgba(239,189,82,.42)}.image{position:relative;height:210px}.image img{height:100%;display:block;transition:.4s}.tribute-card:hover .image img{transform:scale(1.035)}.image-shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.08),rgba(0,0,0,.6))}.pill{position:absolute;left:14px;top:14px;z-index:2;background:rgba(124,86,27,.82)}.pill.published{background:rgba(31,140,77,.8)}.plan-pill{position:absolute;right:14px;top:14px;z-index:2;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:1000}.plan-pill.essential{background:rgba(33,107,77,.86);color:#d7ffec}.plan-pill.premium{background:rgba(179,126,35,.88);color:#fff3c8}.plan-pill.eternal{background:rgba(92,57,139,.88);color:#f0ddff}.tribute-content{padding:19px}.tribute-heading{display:flex;justify-content:space-between;gap:12px}.tribute-heading small{color:#d9bb78;text-transform:uppercase;font-size:11px;letter-spacing:.08em;font-weight:900}.tribute-heading h3{font-family:Georgia,serif;font-size:27px;color:#fff7ea;margin:5px 0 0}.tribute-heading>span{color:#efbd52}.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:17px 0}.meta-grid div{border:1px solid rgba(239,189,82,.12);background:rgba(0,0,0,.18);border-radius:13px;padding:10px}.meta-grid span{display:block;color:#9f978a;font-size:10px;text-transform:uppercase}.meta-grid strong{display:block;color:#f3dfb4;margin-top:4px;font-size:13px}.actions{display:grid;grid-template-columns:1fr 1fr}.actions .danger-action{grid-column:1/-1}
 @media(max-width:1050px){.hero-premium{grid-template-columns:1fr}.hero-image{min-height:300px}.stats{grid-template-columns:repeat(2,1fr)}.cards{grid-template-columns:repeat(2,1fr)}}
+
+.tribute-card.newly-published{position:relative;border-color:#efbd52;box-shadow:0 0 0 2px rgba(239,189,82,.20),0 28px 90px rgba(239,189,82,.16);animation:newCardGlow 1.2s ease both}
+.new-badge{position:absolute;left:14px;bottom:14px;z-index:3;border-radius:999px;padding:7px 11px;background:linear-gradient(135deg,#f6cf72,#fff0ae);color:#211504;font-size:12px;font-weight:1000;box-shadow:0 10px 30px rgba(239,189,82,.25)}
+.checkout-success{padding:24px 0}
+.success-check{width:88px;height:88px;border-radius:50%;margin:0 auto 18px;display:grid;place-items:center;background:linear-gradient(135deg,#42d47d,#b9ffcf);color:#06120a;font-size:48px;font-weight:1000;box-shadow:0 0 55px rgba(66,212,125,.34);animation:successPop .55s ease both}
+.redirect-note{margin-top:18px;color:#f6cf72;font-weight:900}
+.success-overlay{overflow:hidden}
+.confetti-field{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.confetti-field i{position:absolute;left:var(--x);top:-30px;width:10px;height:18px;border-radius:3px;background:hsl(calc(var(--rotate) + 35deg),80%,65%);transform:rotate(var(--rotate));animation:confettiFall 2.8s var(--delay) ease-in forwards}
+.payment-success-modal{position:relative;z-index:2;max-width:570px;padding:36px;text-align:center;border-color:rgba(239,189,82,.45);background:radial-gradient(circle at 50% 0%,rgba(239,189,82,.18),transparent 40%),linear-gradient(145deg,#111716,#071014)}
+.success-ring{width:96px;height:96px;margin:0 auto 18px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(100,255,160,.45);background:rgba(66,212,125,.12);box-shadow:0 0 70px rgba(66,212,125,.22);animation:successPop .65s ease both}
+.success-ring span{width:68px;height:68px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#42d47d,#b9ffcf);color:#06120a;font-size:40px;font-weight:1000}
+.success-eyebrow{display:block;color:#8dffb2;text-transform:uppercase;letter-spacing:.12em;font-size:12px;font-weight:1000}
+.payment-success-modal h2{margin:10px 0 10px!important;font-size:42px!important}
+.payment-success-modal p{line-height:1.6}
+.payment-success-modal p strong{color:#fff6e5}
+.success-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:22px}
+.success-actions a,.success-actions button{min-height:50px;border-radius:14px;padding:12px 15px;text-decoration:none;display:flex;align-items:center;justify-content:center;font-weight:1000;cursor:pointer}
+.success-actions button{border:1px solid rgba(239,189,82,.24);background:rgba(255,255,255,.06);color:#fff}
+.success-actions .whatsapp-action{grid-column:1/-1;background:#1fa855;color:#fff;border:1px solid rgba(111,255,166,.28)}
+.success-close{margin-top:13px;border:0;background:transparent;color:#cdbd9f;font-weight:900;cursor:pointer;padding:10px}
+@keyframes successPop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes confettiFall{0%{transform:translateY(-20px) rotate(var(--rotate));opacity:0}10%{opacity:1}100%{transform:translateY(105vh) rotate(calc(var(--rotate) + 540deg));opacity:.9}}
+@keyframes newCardGlow{0%{transform:translateY(16px);opacity:.45}100%{transform:translateY(0);opacity:1}}
 @media(max-width:850px){.client-page{padding:14px}.hero,.panel-head,.top{align-items:flex-start;flex-direction:column}.hero-copy{padding:28px}.hero-image{min-height:250px}.stats,.cards,.plan-grid{grid-template-columns:1fr}.hero h1{font-size:40px}.top-actions{width:100%;flex-direction:column}.top-actions>*{width:100%;justify-content:center}.actions{grid-template-columns:1fr}.actions .danger-action{grid-column:auto}}
 `}</style>
   );
