@@ -299,7 +299,7 @@ export default function DashboardPage() {
     }
   }
 
-  async function createPayment(tribute, planSlug, cpfCnpj) {
+  async function createPayment(tribute, planSlug, cpfCnpj, couponCode = "") {
     const cpf = onlyDigits(cpfCnpj || "");
 
     if (!cpf) {
@@ -308,7 +308,7 @@ export default function DashboardPage() {
         const billingData = await billingRes.json().catch(() => ({}));
 
         if (billingData?.ok && billingData.billing?.cpf) {
-          return createPayment(tribute, planSlug, billingData.billing.cpf);
+          return createPayment(tribute, planSlug, billingData.billing.cpf, couponCode);
         }
       } catch (error) {
         console.warn("Não foi possível buscar CPF salvo.", error);
@@ -321,6 +321,7 @@ export default function DashboardPage() {
         cpf: "",
         phone: user?.phone || "",
         error: "",
+        couponCode,
       });
       return;
     }
@@ -333,6 +334,7 @@ export default function DashboardPage() {
         cpf: formatCpf(cpf),
         phone: user?.phone || "",
         error: "Informe um CPF válido para gerar o PIX.",
+        couponCode,
       });
       return;
     }
@@ -343,7 +345,12 @@ export default function DashboardPage() {
       const res = await fetch("/api/payments/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tributeId: tribute.id, plan: planSlug, cpfCnpj: cpf }),
+        body: JSON.stringify({
+          tributeId: tribute.id,
+          plan: planSlug,
+          cpfCnpj: cpf,
+          couponCode,
+        }),
       });
 
       const data = await res.json();
@@ -357,6 +364,7 @@ export default function DashboardPage() {
             cpf: formatCpf(cpf),
             phone: user?.phone || "",
             error: data.message || "Informe um CPF válido para gerar o PIX.",
+            couponCode,
           });
           return;
         }
@@ -604,10 +612,57 @@ function TributeCard({ tribute, onPublish, onCopy, onDelete, highlighted }) {
 
 function CheckoutModal({ checkout, plans, onClose, onCreatePayment }) {
   const tribute = checkout.tribute;
+  const [couponCode, setCouponCode] = useState(checkout.couponCode || "");
+  const [coupon, setCoupon] = useState(null);
+  const [couponError, setCouponError] = useState("");
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
   const selectedPlan =
     checkout.payment?.plan ||
     plans.find((plan) => plan.slug === checkout.planSlug) ||
     null;
+
+  async function applyCoupon() {
+    const code = String(couponCode || "").trim().toUpperCase();
+
+    if (!code) {
+      setCoupon(null);
+      setCouponError("Informe um cupom.");
+      return;
+    }
+
+    setValidatingCoupon(true);
+    setCouponError("");
+
+    try {
+      const response = await fetch("/api/coupons/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, plan: checkout.planSlug }),
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.message || "Cupom inválido.");
+      }
+
+      setCoupon(result.coupon);
+      setCouponCode(result.coupon.code);
+    } catch (error) {
+      setCoupon(null);
+      setCouponError(error.message || "Cupom inválido.");
+    } finally {
+      setValidatingCoupon(false);
+    }
+  }
+
+  function generatePaymentWithCoupon(cpf) {
+    return onCreatePayment(
+      checkout.tribute,
+      checkout.planSlug,
+      cpf,
+      coupon?.code || couponCode.trim().toUpperCase()
+    );
+  }
 
   return (
     <div className="modal-overlay">
@@ -618,8 +673,40 @@ function CheckoutModal({ checkout, plans, onClose, onCreatePayment }) {
           <CpfPaymentStep
             checkout={checkout}
             onClose={onClose}
-            onCreatePayment={onCreatePayment}
+            onCreatePayment={generatePaymentWithCoupon}
           />
+        )}
+
+        {(checkout.step === "cpf" || checkout.step === "loading") && selectedPlan && (
+          <div className="coupon-box">
+            <div className="coupon-title">
+              <span>Cupom de desconto</span>
+              {coupon && <strong>✓ Aplicado</strong>}
+            </div>
+            <div className="coupon-controls">
+              <input
+                value={couponCode}
+                onChange={(event) => {
+                  setCouponCode(event.target.value.toUpperCase());
+                  setCoupon(null);
+                  setCouponError("");
+                }}
+                placeholder="EX.: BLACK20"
+                maxLength={30}
+              />
+              <button type="button" onClick={applyCoupon} disabled={validatingCoupon}>
+                {validatingCoupon ? "Validando..." : "Aplicar"}
+              </button>
+            </div>
+            {couponError && <small className="coupon-error">{couponError}</small>}
+            {coupon && (
+              <div className="coupon-summary">
+                <span>De {formatMoney(coupon.originalPriceCents)}</span>
+                <span>Desconto -{formatMoney(coupon.discountCents)}</span>
+                <strong>Total {formatMoney(coupon.finalPriceCents)}</strong>
+              </div>
+            )}
+          </div>
         )}
 
         {checkout.step === "loading" && (
@@ -643,6 +730,14 @@ function CheckoutModal({ checkout, plans, onClose, onCreatePayment }) {
               <div className="selected-plan-summary">
                 <span>Plano da história</span>
                 <strong>{selectedPlan.name}</strong>
+              </div>
+            )}
+
+            {checkout.payment?.coupon && (
+              <div className="coupon-summary pix-coupon-summary">
+                <span>Cupom {checkout.payment.coupon.code}</span>
+                <span>Desconto -{formatMoney(checkout.payment.coupon.discountCents)}</span>
+                <strong>Total {formatMoney(checkout.payment.coupon.finalPriceCents)}</strong>
               </div>
             )}
 
@@ -950,6 +1045,11 @@ textarea{width:100%;min-height:96px;border-radius:16px;border:1px solid rgba(239
 @keyframes successPop{0%{transform:scale(.6);opacity:0}70%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:1}}
 @keyframes confettiFall{0%{transform:translateY(-20px) rotate(var(--rotate));opacity:0}10%{opacity:1}100%{transform:translateY(105vh) rotate(calc(var(--rotate) + 540deg));opacity:.9}}
 @keyframes newCardGlow{0%{transform:translateY(16px);opacity:.45}100%{transform:translateY(0);opacity:1}}
+
+.coupon-box{margin:14px 0;border:1px solid rgba(239,189,82,.2);background:rgba(239,189,82,.055);border-radius:16px;padding:14px;text-align:left}
+.coupon-title{display:flex;justify-content:space-between;gap:10px;margin-bottom:10px}.coupon-title span{color:#f6cf72;font-weight:1000}.coupon-title strong{color:#8dffb2;font-size:12px}
+.coupon-controls{display:grid;grid-template-columns:1fr auto;gap:8px}.coupon-controls input{min-width:0;border:1px solid rgba(239,189,82,.2);background:rgba(255,255,255,.06);color:#fff;border-radius:12px;padding:12px;text-transform:uppercase}.coupon-controls button{border:0;border-radius:12px;background:linear-gradient(135deg,#c99337,#f7dc82);color:#171005;padding:0 15px;font-weight:1000;cursor:pointer}
+.coupon-error{display:block;color:#ffb7b7;margin-top:8px}.coupon-summary{display:grid;gap:5px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(239,189,82,.14)}.coupon-summary span{color:#c8b998}.coupon-summary strong{color:#8dffb2;font-size:17px}.pix-coupon-summary{text-align:left;margin-bottom:12px}
 @media(max-width:850px){.client-page{padding:14px}.hero,.panel-head,.top{align-items:flex-start;flex-direction:column}.hero-copy{padding:28px}.hero-image{min-height:250px}.stats,.cards,.plan-grid{grid-template-columns:1fr}.hero h1{font-size:40px}.top-actions{width:100%;flex-direction:column}.top-actions>*{width:100%;justify-content:center}.actions{grid-template-columns:1fr}.actions .danger-action{grid-column:auto}}
 `}</style>
   );

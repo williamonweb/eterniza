@@ -18,6 +18,11 @@ enum TributeStatus {
   ARCHIVED
 }
 
+enum CouponDiscountType {
+  PERCENT
+  FIXED
+}
+
 model User {
   id        String   @id @default(cuid())
   name      String
@@ -75,15 +80,21 @@ model Photo {
 }
 
 model Payment {
-  id             String   @id @default(cuid())
-  status         String
-  amount         Float
-  mercadoPagoId  String?
+  id              String   @id @default(cuid())
+  status          String
+  amount          Float
+  originalAmount  Float?
+  discountAmount  Float?
+  couponCode      String?
+  mercadoPagoId   String?
 
-  tributeId      String
-  tribute        Tribute @relation(fields: [tributeId], references: [id], onDelete: Cascade)
+  tributeId       String
+  tribute         Tribute @relation(fields: [tributeId], references: [id], onDelete: Cascade)
 
-  createdAt      DateTime @default(now())
+  couponId        String?
+  coupon          Coupon? @relation(fields: [couponId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime @default(now())
 }
 
 model View {
@@ -118,4 +129,26 @@ model PlanSetting {
 
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+}
+
+
+model Coupon {
+  id              String             @id @default(cuid())
+  code            String             @unique
+  name            String?
+  description     String?
+  discountType    CouponDiscountType
+  discountValue   Int
+  appliesToPlan   String?
+  startsAt        DateTime?
+  endsAt          DateTime?
+  maxUses         Int?
+  usedCount       Int                @default(0)
+  oncePerUser     Boolean            @default(false)
+  isActive        Boolean            @default(true)
+
+  payments        Payment[]
+
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 }

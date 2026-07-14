@@ -26,6 +26,49 @@ function isValidCpf(value) {
   return digit === Number(cpf[10]);
 }
 
+
+function normalizeCouponCode(value) {
+  return String(value || "").trim().toUpperCase().replace(/\s+/g, "");
+}
+
+function couponWindowIsValid(coupon, now = new Date()) {
+  if (!coupon?.isActive) return false;
+
+  if (coupon.startsAt) {
+    const startsAt = new Date(coupon.startsAt);
+    if (!Number.isNaN(startsAt.getTime()) && now < startsAt) return false;
+  }
+
+  if (coupon.endsAt) {
+    const endsAt = new Date(coupon.endsAt);
+    if (!Number.isNaN(endsAt.getTime())) {
+      endsAt.setHours(23, 59, 59, 999);
+      if (now > endsAt) return false;
+    }
+  }
+
+  return true;
+}
+
+function calculateCouponDiscount(coupon, priceCents) {
+  const original = Math.max(0, Number(priceCents || 0));
+  let discount = 0;
+
+  if (coupon.discountType === "PERCENT") {
+    const percent = Math.min(100, Math.max(0, Number(coupon.discountValue || 0)));
+    discount = Math.round(original * (percent / 100));
+  } else {
+    discount = Math.max(0, Number(coupon.discountValue || 0));
+  }
+
+  discount = Math.min(original, discount);
+  return {
+    originalPriceCents: original,
+    discountCents: discount,
+    finalPriceCents: Math.max(100, original - discount),
+  };
+}
+
 export async function POST(req) {
   try {
     const user = await getCurrentUser();
@@ -36,8 +79,9 @@ export async function POST(req) {
 
     const body = await req.json().catch(() => ({}));
     const tributeId = String(body.tributeId || "");
-    const planSlug = String(body.plan || "premium");
+    const requestedPlanSlug = String(body.plan || "").trim().toLowerCase();
     const cpfFromBody = onlyDigits(body.cpfCnpj || body.cpf || "");
+    const couponCode = normalizeCouponCode(body.couponCode || body.coupon || "");
 
     if (!tributeId) {
       return NextResponse.json({ ok: false, message: "Homenagem não informada." }, { status: 400 });
@@ -80,9 +124,29 @@ export async function POST(req) {
       });
     }
 
+    const tributeContent = tribute.content && typeof tribute.content === "object"
+      ? tribute.content
+      : {};
+    const savedPlanSlug = String(
+      tribute.planId ||
+      tributeContent?.plan?.slug ||
+      tributeContent?.plan?.id ||
+      ""
+    ).trim().toLowerCase();
+
+    const planSlug = savedPlanSlug || requestedPlanSlug;
+
+    if (!planSlug) {
+      return NextResponse.json(
+        { ok: false, message: "Plano da homenagem não encontrado." },
+        { status: 400 }
+      );
+    }
+
     const plan = await getPlanBySlug(planSlug);
-    const tributeContent = tribute.content && typeof tribute.content === 'object' ? tribute.content : {};
-    const tributePhotos = Array.isArray(tributeContent.photos) ? tributeContent.photos.filter(Boolean) : [];
+    const tributePhotos = Array.isArray(tributeContent.photos)
+      ? tributeContent.photos.filter(Boolean)
+      : [];
     const photoLimit = Number(plan.photos || 0);
 
     if (!photoLimit || tributePhotos.length > photoLimit) {
@@ -96,21 +160,111 @@ export async function POST(req) {
       );
     }
 
+    let coupon = null;
+    let pricing = {
+      originalPriceCents: Number(plan.priceCents || 0),
+      discountCents: 0,
+      finalPriceCents: Number(plan.priceCents || 0),
+    };
+
+    if (couponCode) {
+      coupon = await prisma.coupon.findUnique({
+        where: { code: couponCode },
+      });
+
+      if (!coupon || !couponWindowIsValid(coupon)) {
+        return NextResponse.json(
+          { ok: false, code: "COUPON_INVALID", message: "Cupom inválido, inativo ou expirado." },
+          { status: 400 }
+        );
+      }
+
+      if (
+        coupon.appliesToPlan &&
+        coupon.appliesToPlan !== "*" &&
+        coupon.appliesToPlan.toLowerCase() !== planSlug
+      ) {
+        return NextResponse.json(
+          { ok: false, code: "COUPON_PLAN_INVALID", message: "Este cupom não é válido para o plano escolhido." },
+          { status: 400 }
+        );
+      }
+
+      if (coupon.maxUses !== null && coupon.usedCount >= coupon.maxUses) {
+        return NextResponse.json(
+          { ok: false, code: "COUPON_LIMIT", message: "Este cupom atingiu o limite de utilizações." },
+          { status: 400 }
+        );
+      }
+
+      if (coupon.oncePerUser) {
+        const alreadyUsed = await prisma.payment.findFirst({
+          where: {
+            couponId: coupon.id,
+            tribute: { userId: user.id },
+            status: { in: ["PENDING", "APPROVED", "RECEIVED", "CONFIRMED"] },
+          },
+          select: { id: true },
+        });
+
+        if (alreadyUsed) {
+          return NextResponse.json(
+            { ok: false, code: "COUPON_ALREADY_USED", message: "Este cupom já foi utilizado por você." },
+            { status: 400 }
+          );
+        }
+      }
+
+      pricing = calculateCouponDiscount(coupon, plan.priceCents);
+    }
+
+    const chargePlan = {
+      ...plan,
+      priceCents: pricing.finalPriceCents,
+      cents: pricing.finalPriceCents,
+      price: pricing.finalPriceCents / 100,
+    };
+
     const asaasResult = await createAsaasPixPayment({
       tributeId: tribute.id,
       payerEmail: dbUser.email,
       payerName: dbUser.name,
       payerCpfCnpj: cpfCnpj,
-      plan,
+      plan: chargePlan,
     });
 
-    const payment = await prisma.payment.create({
-      data: {
-        tributeId: tribute.id,
-        amount: plan.price,
-        status: "PENDING",
-        mercadoPagoId: String(asaasResult.payment.id),
-      },
+    const payment = await prisma.$transaction(async (tx) => {
+      if (coupon) {
+        const updated = await tx.coupon.updateMany({
+          where: {
+            id: coupon.id,
+            isActive: true,
+            ...(coupon.maxUses !== null
+              ? { usedCount: { lt: coupon.maxUses } }
+              : {}),
+          },
+          data: {
+            usedCount: { increment: 1 },
+          },
+        });
+
+        if (updated.count !== 1) {
+          throw new Error("O cupom ficou indisponível antes da conclusão do pagamento.");
+        }
+      }
+
+      return tx.payment.create({
+        data: {
+          tributeId: tribute.id,
+          amount: pricing.finalPriceCents / 100,
+          originalAmount: pricing.originalPriceCents / 100,
+          discountAmount: pricing.discountCents / 100,
+          couponCode: coupon?.code || null,
+          couponId: coupon?.id || null,
+          status: "PENDING",
+          mercadoPagoId: String(asaasResult.payment.id),
+        },
+      });
     });
 
     return NextResponse.json({
@@ -121,7 +275,23 @@ export async function POST(req) {
         mercadoPagoId: asaasResult.payment.id,
         asaasId: asaasResult.payment.id,
         status: asaasResult.payment.status,
-        plan,
+        plan: {
+          ...plan,
+          price: pricing.finalPriceCents / 100,
+          priceCents: pricing.finalPriceCents,
+          cents: pricing.finalPriceCents,
+        },
+        coupon: coupon
+          ? {
+              code: coupon.code,
+              name: coupon.name,
+              discountType: coupon.discountType,
+              discountValue: coupon.discountValue,
+              originalPriceCents: pricing.originalPriceCents,
+              discountCents: pricing.discountCents,
+              finalPriceCents: pricing.finalPriceCents,
+            }
+          : null,
         qrCode:
           asaasResult.qrCode?.payload ||
           asaasResult.qrCode?.pixCopiaECola ||

@@ -1711,7 +1711,20 @@ function checkoutStyle(){
       .eterniza-pay-secondary{border:1px solid rgba(239,189,82,.28);background:rgba(255,255,255,.06);color:#fff;border-radius:14px;padding:13px 16px;font-weight:900;cursor:pointer}
       .eterniza-pix-box{text-align:center;max-width:620px;margin:0 auto}
       .eterniza-pix-img{width:300px;max-width:100%;background:#fff;border-radius:20px;padding:14px;margin:12px auto;display:block}
-      .eterniza-cpf-label{display:block;text-align:left;color:#f6cf72;font-weight:900;margin:14px 0 7px}.eterniza-cpf-label small{color:#ead9b7;font-weight:500}.eterniza-cpf-input{width:100%;box-sizing:border-box;border:1px solid rgba(239,189,82,.25);background:rgba(255,255,255,.07);color:#fff;border-radius:14px;padding:14px 15px;font-size:17px;outline:none}.eterniza-cpf-input:focus{border-color:#efbd52;box-shadow:0 0 0 3px rgba(239,189,82,.12)}.eterniza-cpf-error{min-height:20px;color:#ff9d9d!important;text-align:left;font-weight:800;margin:8px 0!important}.eterniza-pix-text{width:100%;min-height:96px;border-radius:16px;border:1px solid rgba(239,189,82,.25);background:rgba(255,255,255,.08);color:#fff;padding:14px;box-sizing:border-box}
+      .eterniza-cpf-label{display:block;text-align:left;color:#f6cf72;font-weight:900;margin:14px 0 7px}.eterniza-cpf-label small{color:#ead9b7;font-weight:500}.eterniza-cpf-input{width:100%;box-sizing:border-box;border:1px solid rgba(239,189,82,.25);background:rgba(255,255,255,.07);color:#fff;border-radius:14px;padding:14px 15px;font-size:17px;outline:none}.eterniza-cpf-input:focus{border-color:#efbd52;box-shadow:0 0 0 3px rgba(239,189,82,.12)}.eterniza-cpf-error{min-height:20px;color:#ff9d9d!important;text-align:left;font-weight:800;margin:8px 0!important}
+      .eterniza-coupon-box{margin:14px 0;border:1px solid rgba(239,189,82,.2);background:rgba(239,189,82,.055);border-radius:16px;padding:14px;text-align:left}
+      .eterniza-coupon-row{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:12px;align-items:stretch}
+      .eterniza-coupon-input{width:100%;min-width:0;height:56px;border:1px solid rgba(239,189,82,.2);background:#232726;color:#fff;border-radius:16px;padding:0 16px;font-size:16px;line-height:56px;text-transform:uppercase;outline:none;box-sizing:border-box;transition:border-color .2s ease,box-shadow .2s ease}
+      .eterniza-coupon-input:focus{border-color:#efbd52;box-shadow:0 0 0 3px rgba(239,189,82,.12)}
+      .eterniza-coupon-apply{appearance:none;-webkit-appearance:none;width:100%;height:56px;border:0!important;border-radius:16px!important;background:linear-gradient(135deg,#c99337,#f7dc82)!important;color:#171005!important;padding:0 18px!important;font-family:inherit;font-size:15px;font-weight:1000;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 10px 28px rgba(239,189,82,.14);transition:transform .2s ease,box-shadow .2s ease,opacity .2s ease}
+      .eterniza-coupon-apply:hover{transform:translateY(-2px);box-shadow:0 14px 34px rgba(239,189,82,.24)}
+      .eterniza-coupon-apply:focus-visible{outline:3px solid rgba(239,189,82,.22);outline-offset:2px}
+      .eterniza-coupon-apply:disabled{opacity:.62;cursor:wait;transform:none;box-shadow:none}
+      .eterniza-coupon-apply.applied{background:linear-gradient(135deg,#2f9f63,#8dffb2)!important;color:#06120a!important}
+      .eterniza-coupon-error{display:block;color:#ffb7b7;margin-top:8px}
+      .eterniza-coupon-summary{display:grid;gap:5px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(239,189,82,.14)}
+      .eterniza-coupon-summary span{color:#c8b998}.eterniza-coupon-summary strong{color:#8dffb2;font-size:17px}
+      .eterniza-pix-text{width:100%;min-height:96px;border-radius:16px;border:1px solid rgba(239,189,82,.25);background:rgba(255,255,255,.08);color:#fff;padding:14px;box-sizing:border-box}
       .eterniza-pay-status{margin-top:18px;color:#f6cf72;font-weight:1000;display:flex;align-items:center;justify-content:center;gap:10px}
       .eterniza-spinner{width:20px;height:20px;border-radius:50%;border:3px solid rgba(246,207,114,.22);border-top-color:#f6cf72;display:inline-block;animation:eternizaSpin .85s linear infinite}
       .eterniza-loading-orb{width:74px;height:74px;border-radius:50%;margin:4px auto 18px;border:4px solid rgba(246,207,114,.18);border-top-color:#f6cf72;border-right-color:#f6cf72;animation:eternizaSpin 1s linear infinite;box-shadow:0 0 40px rgba(246,207,114,.18)}
@@ -1738,7 +1751,7 @@ function checkoutStyle(){
       @keyframes eternizaSpin{to{transform:rotate(360deg)}}
       @keyframes eternizaPop{0%{transform:scale(.65);opacity:0}70%{transform:scale(1.08);opacity:1}100%{transform:scale(1)}}
       @keyframes eternizaConfetti{0%{transform:translateY(-20px) rotate(0);opacity:0}10%{opacity:1}100%{transform:translateY(108vh) rotate(620deg);opacity:.9}}
-      @media(max-width:850px){.eterniza-plan-grid{grid-template-columns:1fr}.eterniza-pay-modal{padding:24px}.eterniza-pay-modal h2{font-size:34px}}
+      @media(max-width:850px){.eterniza-plan-grid{grid-template-columns:1fr}.eterniza-pay-modal{padding:24px}.eterniza-pay-modal h2{font-size:34px}.eterniza-coupon-row{grid-template-columns:1fr}.eterniza-coupon-apply{width:100%}}
     </style>
   `;
 }
@@ -1767,6 +1780,106 @@ function showPublishCheckoutStep(html){
   if(close) close.onclick = closePublishCheckout;
 }
 
+async function validatePreviewCoupon(planSlug, code){
+  const couponCode=String(code||'').trim().toUpperCase();
+  if(!couponCode) return null;
+
+  const response=await fetch('/api/coupons/validate',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({code:couponCode,plan:planSlug})
+  });
+  const data=await response.json().catch(()=>({}));
+
+  if(!response.ok || !data.ok){
+    throw new Error(data.message||'Cupom inválido.');
+  }
+
+  return data.coupon;
+}
+
+function requestCouponBeforePix(planSlug){
+  const plan=plans.find(p=>String(p.slug||p.id).toLowerCase()===planSlug)||state.plan;
+
+  showPublishCheckoutStep(`
+    <div class="eterniza-pix-box">
+      <h2>Finalizar pagamento</h2>
+      <p>Plano <b>${esc(plan?.name||'')}</b> • <b>${esc(plan?.price||'')}</b></p>
+      <div class="eterniza-coupon-box">
+        <label class="eterniza-cpf-label" for="eternizaCouponInput">Tem um cupom?</label>
+        <div class="eterniza-coupon-row">
+          <input class="eterniza-coupon-input" id="eternizaCouponInput" maxlength="30" placeholder="EX.: BLACK20" value="${esc(state.couponCode||'')}">
+          <button class="eterniza-coupon-apply" type="button" id="applyPreviewCoupon">Aplicar</button>
+        </div>
+        <small class="eterniza-coupon-error" id="eternizaCouponError"></small>
+        <div id="eternizaCouponSummary"></div>
+      </div>
+      <button class="eterniza-pay-btn" type="button" id="continuePreviewPayment">Continuar para o PIX</button>
+    </div>
+  `);
+
+  const input=document.getElementById('eternizaCouponInput');
+  if(input) input.oninput=()=>{
+    input.value=input.value.toUpperCase();
+    state.appliedCoupon=null;
+    const applyButton=document.getElementById('applyPreviewCoupon');
+    if(applyButton){
+      applyButton.classList.remove('applied');
+      applyButton.textContent='Aplicar';
+    }
+    const summary=document.getElementById('eternizaCouponSummary');
+    if(summary){summary.className='';summary.innerHTML='';}
+    const error=document.getElementById('eternizaCouponError');
+    if(error) error.textContent='';
+  };
+
+  const apply=document.getElementById('applyPreviewCoupon');
+  if(apply){
+    apply.onclick=async()=>{
+      const error=document.getElementById('eternizaCouponError');
+      const summary=document.getElementById('eternizaCouponSummary');
+      apply.disabled=true;
+      apply.classList.remove('applied');
+      apply.textContent='Validando...';
+      if(error) error.textContent='';
+      try{
+        const coupon=await validatePreviewCoupon(planSlug,input?.value||'');
+        state.couponCode=coupon?.code||'';
+        state.appliedCoupon=coupon||null;
+        persistBuilderState();
+        apply.classList.add('applied');
+        apply.textContent='✓ Aplicado';
+        if(summary && coupon){
+          summary.className='eterniza-coupon-summary';
+          summary.innerHTML=`<span>De ${formatPlanCurrencyFromCents(coupon.originalPriceCents)}</span><span>Desconto -${formatPlanCurrencyFromCents(coupon.discountCents)}</span><strong>Total ${formatPlanCurrencyFromCents(coupon.finalPriceCents)}</strong>`;
+        }
+      }catch(err){
+        state.couponCode='';
+        state.appliedCoupon=null;
+        apply.classList.remove('applied');
+        persistBuilderState();
+        if(summary){summary.className='';summary.innerHTML='';}
+        if(error) error.textContent=err.message||'Cupom inválido.';
+      }finally{
+        apply.disabled=false;
+        if(!state.appliedCoupon){
+          apply.classList.remove('applied');
+          apply.textContent='Aplicar';
+        }
+      }
+    };
+  }
+
+  const next=document.getElementById('continuePreviewPayment');
+  if(next){
+    next.onclick=()=>{
+      state.couponCode=String(input?.value||'').trim().toUpperCase();
+      persistBuilderState();
+      createPreviewPix(planSlug,'',false,state.couponCode);
+    };
+  }
+}
+
 async function openPublishCheckout(){
   const planSlug=String(state.plan?.slug||state.plan?.id||'').trim().toLowerCase();
 
@@ -1786,7 +1899,7 @@ async function openPublishCheckout(){
 
   state.plan={...validPlan,photos:planPhotoLimit(validPlan)};
   saveState();
-  await createPreviewPix(planSlug);
+  requestCouponBeforePix(planSlug);
 }
 
 async function ensureCurrentTributeSaved(){
@@ -1908,7 +2021,7 @@ async function getSavedBilling(){
   return null;
 }
 
-function requestCpfBeforePix(planSlug,billing={}){
+function requestCpfBeforePix(planSlug,billing={},couponCode=""){
   showPublishCheckoutStep(`
     <div class="eterniza-pix-box">
       <h2>Dados para pagamento</h2>
@@ -1961,7 +2074,7 @@ function requestCpfBeforePix(planSlug,billing={}){
         state.userCpf=cpf;
         if(data.billing?.phone) state.userPhone=data.billing.phone;
         persistBuilderState();
-        createPreviewPix(planSlug,cpf,true);
+        createPreviewPix(planSlug,cpf,true,couponCode);
       }catch(err){
         if(error) error.textContent=err.message||'Não foi possível salvar os dados.';
         save.disabled=false;
@@ -1974,7 +2087,7 @@ function requestCpfBeforePix(planSlug,billing={}){
   if(back) back.onclick=()=>choosePaymentMethod(planSlug);
 }
 
-async function createPreviewPix(planSlug,cpfCnpj='',billingAlreadyChecked=false){
+async function createPreviewPix(planSlug,cpfCnpj='',billingAlreadyChecked=false,couponCode=''){
   const savedPlanSlug=String(state.plan?.slug||state.plan?.id||'').trim().toLowerCase();
   planSlug=savedPlanSlug||String(planSlug||'').trim().toLowerCase();
   if(!planSlug){
@@ -1991,13 +2104,13 @@ async function createPreviewPix(planSlug,cpfCnpj='',billingAlreadyChecked=false)
       const billing=await getSavedBilling();
       cpf=onlyCpfDigits(billing?.cpf||'');
       if(!isValidCpfInput(cpf)){
-        requestCpfBeforePix(planSlug,billing||{});
+        requestCpfBeforePix(planSlug,billing||{},couponCode);
         return;
       }
     }
 
     if(!isValidCpfInput(cpf)){
-      requestCpfBeforePix(planSlug,{cpf});
+      requestCpfBeforePix(planSlug,{cpf},couponCode);
       return;
     }
 
@@ -2017,7 +2130,8 @@ async function createPreviewPix(planSlug,cpfCnpj='',billingAlreadyChecked=false)
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         tributeId: tribute.id,
-        plan: planSlug
+        plan: planSlug,
+        couponCode: String(couponCode || state.couponCode || "").trim().toUpperCase()
       })
     });
 
@@ -2036,6 +2150,7 @@ async function createPreviewPix(planSlug,cpfCnpj='',billingAlreadyChecked=false)
       <div class="eterniza-pix-box">
         <h2>PIX gerado com sucesso</h2>
         <p>Pague com o QR Code abaixo. Após a aprovação, sua história será publicada automaticamente.</p>
+        ${payment.coupon ? `<div class="eterniza-coupon-summary"><span>Cupom ${esc(payment.coupon.code)}</span><span>Desconto -${formatPlanCurrencyFromCents(payment.coupon.discountCents)}</span><strong>Total ${formatPlanCurrencyFromCents(payment.coupon.finalPriceCents)}</strong></div>` : ''}
         ${payment.qrCodeBase64 ? `<img class="eterniza-pix-img" src="data:image/png;base64,${payment.qrCodeBase64}" alt="QR Code PIX">` : ''}
         ${payment.qrCode ? `<textarea class="eterniza-pix-text" readonly id="eternizaPixCopy">${payment.qrCode}</textarea>` : ''}
         <button class="eterniza-pay-btn" type="button" id="copyPixBtn">Copiar PIX copia e cola</button>
