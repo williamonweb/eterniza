@@ -10,6 +10,7 @@ const menu = [
   ["planos", "✦", "Planos e promoções"],
   ["analytics", "⌁", "Analytics"],
   ["cupons", "◇", "Cupons"],
+  ["pets", "🐾", "Eterniza Pets"],
   ["configuracoes", "⚙", "Configurações"],
 ];
 
@@ -52,6 +53,9 @@ export default function AdminPage() {
   const [settings, setSettings] = useState(null);
   const [settingsTab, setSettingsTab] = useState("general");
   const [savingSettings, setSavingSettings] = useState(false);
+  const [petClinics, setPetClinics] = useState([]);
+  const [petEditor, setPetEditor] = useState(null);
+  const [savingClinic, setSavingClinic] = useState(false);
 
   async function load() {
     try {
@@ -69,17 +73,19 @@ export default function AdminPage() {
 
       setAuthorized(true);
 
-      const [dashboardRes, plansRes, couponsRes, settingsRes] = await Promise.all([
+      const [dashboardRes, plansRes, couponsRes, settingsRes, petsRes] = await Promise.all([
         fetch("/api/admin/dashboard", { cache: "no-store" }),
         fetch("/api/admin/plans", { cache: "no-store" }),
         fetch("/api/admin/coupons", { cache: "no-store" }),
         fetch("/api/admin/settings", { cache: "no-store" }),
+        fetch("/api/admin/pets/clinics", { cache: "no-store" }).catch(() => null),
       ]);
 
       const dashboardData = await dashboardRes.json().catch(() => ({}));
       const plansData = await plansRes.json().catch(() => ({}));
       const couponsData = await couponsRes.json().catch(() => ({}));
       const settingsData = await settingsRes.json().catch(() => ({}));
+      const petsData = petsRes ? await petsRes.json().catch(() => ({})) : {};
 
       if (dashboardData?.ok) setData(dashboardData);
       if (plansData?.ok && Array.isArray(plansData.plans)) {
@@ -91,6 +97,7 @@ export default function AdminPage() {
       if (settingsData?.ok && settingsData.settings) {
         setSettings(settingsData.settings);
       }
+      if (petsData?.ok && Array.isArray(petsData.clinics)) setPetClinics(petsData.clinics);
     } catch (error) {
       console.error(error);
       setModal({
@@ -223,6 +230,27 @@ export default function AdminPage() {
     }
   }
 
+
+
+  async function updatePetClinic(payload) {
+    setSavingClinic(true);
+    try {
+      const response = await fetch("/api/admin/pets/clinics", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.message || "Não foi possível atualizar a clínica.");
+      setPetEditor(null);
+      await load();
+      setModal({ title: "Eterniza Pets", text: result.message || "Clínica atualizada." });
+    } catch (error) {
+      setModal({ title: "Erro na clínica", text: error.message || "Não foi possível atualizar." });
+    } finally {
+      setSavingClinic(false);
+    }
+  }
 
   function updateSetting(key, value) {
     setSettings((current) => ({ ...(current || {}), [key]: value }));
@@ -393,6 +421,16 @@ export default function AdminPage() {
             saveCoupon={saveCoupon}
             deleteCoupon={deleteCoupon}
             saving={savingCoupon}
+          />
+        )}
+
+        {active === "pets" && (
+          <PetsAdmin
+            clinics={petClinics}
+            editor={petEditor}
+            setEditor={setPetEditor}
+            updateClinic={updatePetClinic}
+            saving={savingClinic}
           />
         )}
 
@@ -876,6 +914,111 @@ function Analytics({ data }) {
 }
 
 
+
+function PetsAdmin({ clinics, editor, setEditor, updateClinic, saving }) {
+  const pending = clinics.filter((clinic) => clinic.status === "PENDING");
+  const active = clinics.filter((clinic) => clinic.status === "APPROVED");
+  const projected = active.reduce((sum, clinic) => sum + Number(clinic.monthlyPriceCents || 0), 0) / 100;
+
+  return (
+    <section className="section-stack">
+      <div className="section-heading">
+        <div><span className="eyebrow">B2B Veterinário</span><h2>Eterniza Pets</h2><p>Aprove clínicas e configure os pacotes mensais.</p></div>
+      </div>
+
+      <div className="metric-grid">
+        <Metric icon="⏳" value={pending.length} label="Solicitações" detail="Aguardando análise" />
+        <Metric icon="🐾" value={active.length} label="Clínicas ativas" detail="Acesso liberado" />
+        <Metric icon="R$" value={money(projected)} label="Receita prevista" detail="Pacotes ativos" />
+        <Metric icon="Σ" value={clinics.length} label="Total de cadastros" detail="Todos os status" />
+      </div>
+
+      <div className="pets-admin-grid">
+        {clinics.map((clinic) => (
+          <article className="pet-clinic-card" key={clinic.id}>
+            <div className="pet-clinic-head">
+              <div><span>{clinic.code}</span><h3>{clinic.tradeName}</h3><small>{clinic.legalName}</small></div>
+              <em className={`status ${statusClass(clinic.status)}`}>{clinic.status}</em>
+            </div>
+            <div className="pet-clinic-meta">
+              <span>CNPJ <b>{clinic.cnpj}</b></span>
+              <span>Responsável <b>{clinic.responsibleName}</b></span>
+              <span>Contato <b>{clinic.responsibleEmail}</b></span>
+              <span>Unidades <b>{clinic.unitsCount}</b></span>
+              <span>Pacote <b>{clinic.monthlyPackageName}</b></span>
+              <span>Valor <b>{clinic.monthlyPriceCents ? money(clinic.monthlyPriceCents / 100) : "A definir"}</b></span>
+            </div>
+            {clinic.rejectionReason && <p className="rejection">{clinic.rejectionReason}</p>}
+            <div className="pet-clinic-actions">
+              <button onClick={() => setEditor({
+                ...clinic,
+                monthlyPrice: clinic.monthlyPriceCents ? (clinic.monthlyPriceCents / 100).toFixed(2).replace(".", ",") : "",
+              })}>Ver e configurar</button>
+              {clinic.status === "PENDING" && <button className="primary" onClick={() => setEditor({
+                ...clinic,
+                monthlyPrice: "",
+                approveMode: true,
+              })}>Analisar</button>}
+              {clinic.status === "APPROVED" && <button className="danger-button" onClick={() => updateClinic({ id: clinic.id, action: "SUSPEND" })}>Suspender</button>}
+              {clinic.status === "SUSPENDED" && <button className="primary" onClick={() => updateClinic({ id: clinic.id, action: "REACTIVATE" })}>Reativar</button>}
+            </div>
+          </article>
+        ))}
+        {!clinics.length && <div className="coming-soon"><span>Eterniza Pets</span><h2>Nenhuma clínica cadastrada.</h2><p>As solicitações aparecerão aqui.</p></div>}
+      </div>
+
+      {editor && <PetClinicModal clinic={editor} setClinic={setEditor} onClose={() => setEditor(null)} onSave={updateClinic} saving={saving} />}
+    </section>
+  );
+}
+
+function PetClinicModal({ clinic, setClinic, onClose, onSave, saving }) {
+  const update = (key, value) => setClinic((current) => ({ ...current, [key]: value }));
+  const cents = Math.round(Number(String(clinic.monthlyPrice || "0").replace(",", ".")) * 100);
+
+  return <div className="modal-overlay">
+    <div className="pet-modal">
+      <div className="panel-heading"><div><span className="eyebrow">{clinic.code}</span><h3>{clinic.tradeName}</h3></div><button onClick={onClose}>×</button></div>
+      <div className="clinic-detail-grid">
+        <span>Razão social<b>{clinic.legalName}</b></span><span>CNPJ<b>{clinic.cnpj}</b></span>
+        <span>E-mail<b>{clinic.email}</b></span><span>Telefone<b>{clinic.phone}</b></span>
+        <span>Responsável<b>{clinic.responsibleName}</b></span><span>Cargo<b>{clinic.responsibleRole || "—"}</b></span>
+        <span>Cidade<b>{clinic.city || "—"} / {clinic.state || "—"}</b></span><span>Estimativa mensal<b>{clinic.estimatedMonthlyUses ?? "—"}</b></span>
+      </div>
+      <div className="coupon-form-grid">
+        <label>Nome do pacote<input value={clinic.monthlyPackageName || ""} onChange={(e) => update("monthlyPackageName", e.target.value)} /></label>
+        <label>Valor mensal<input inputMode="decimal" value={clinic.monthlyPrice || ""} onChange={(e) => update("monthlyPrice", e.target.value)} placeholder="299,00" /></label>
+        <label>Limite mensal<input type="number" min="0" value={clinic.monthlyTributeLimit || 0} onChange={(e) => update("monthlyTributeLimit", Number(e.target.value))} /></label>
+        <label>Dia de vencimento<input type="number" min="1" max="28" value={clinic.billingDay || 10} onChange={(e) => update("billingDay", Number(e.target.value))} /></label>
+      </div>
+      <div className="coupon-switches">
+        <label className="switch"><input type="checkbox" checked={clinic.showEternizaBrand !== false} onChange={(e) => update("showEternizaBrand", e.target.checked)} /><i></i>Mostrar logo Eterniza junto ao logo da clínica</label>
+        <label className="switch"><input type="checkbox" checked={clinic.showEternizaCta !== false} onChange={(e) => update("showEternizaCta", e.target.checked)} /><i></i>Mostrar “Conheça o Eterniza” no final</label>
+      </div>
+      <div className="coupon-form-grid">
+        <label>Texto do botão<input value={clinic.eternizaCtaText || "Conheça o Eterniza"} onChange={(e) => update("eternizaCtaText", e.target.value)} /></label>
+        <label>Link do botão<input value={clinic.eternizaCtaUrl || "https://eternizas.com.br"} onChange={(e) => update("eternizaCtaUrl", e.target.value)} /></label>
+      </div>
+      <div className="coupon-editor-actions">
+        {clinic.status === "PENDING" && <button className="danger-button" onClick={() => onSave({ id: clinic.id, action: "REJECT", reason: "Cadastro não aprovado pela administração." })}>Recusar</button>}
+        <button onClick={onClose}>Cancelar</button>
+        <button className="primary" disabled={saving} onClick={() => onSave({
+          id: clinic.id,
+          action: clinic.status === "PENDING" ? "APPROVE" : "UPDATE",
+          monthlyPackageName: clinic.monthlyPackageName,
+          monthlyPriceCents: cents,
+          monthlyTributeLimit: Number(clinic.monthlyTributeLimit || 0),
+          billingDay: Number(clinic.billingDay || 10),
+          showEternizaBrand: clinic.showEternizaBrand,
+          showEternizaCta: clinic.showEternizaCta,
+          eternizaCtaText: clinic.eternizaCtaText,
+          eternizaCtaUrl: clinic.eternizaCtaUrl,
+        })}>{saving ? "Salvando..." : clinic.status === "PENDING" ? "Aprovar e liberar acesso" : "Salvar configurações"}</button>
+      </div>
+    </div>
+  </div>;
+}
+
 function SettingsManager({
   settings,
   activeTab,
@@ -1219,8 +1362,8 @@ function Style() {
 .dashboard-stack,.section-stack{display:grid;gap:18px}.welcome,.panel,.metric,.section-heading,.plan-editor,.coming-soon{border:1px solid rgba(239,189,82,.13);background:linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.018));border-radius:22px;box-shadow:0 24px 70px rgba(0,0,0,.22)}
 .welcome{padding:28px;display:flex;justify-content:space-between;gap:25px;align-items:center}.welcome h2{font:700 36px Georgia,serif;margin:8px 0}.welcome p{color:#bdb5a8;margin:0}.first-sale{min-width:300px;border:1px dashed rgba(239,189,82,.28);border-radius:18px;padding:17px}.first-sale.completed{border-style:solid;background:rgba(75,188,115,.07)}.first-sale span,.first-sale small,.first-sale em{display:block}.first-sale span{color:#efbd52;font-weight:900}.first-sale strong{display:block;font-size:26px;margin:5px 0}.first-sale small{color:#c8c0b2}.first-sale em{font-size:11px;color:#8f887e;margin-top:7px;font-style:normal}
 .metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.metric{padding:20px;display:flex;align-items:center;gap:14px}.metric-icon{width:46px;height:46px;border-radius:14px;background:rgba(239,189,82,.1);border:1px solid rgba(239,189,82,.16);display:grid;place-items:center;color:#efbd52;font-weight:1000}.metric strong,.metric span,.metric small{display:block}.metric strong{font-size:24px}.metric span{color:#efbd52;font-weight:900;margin-top:3px}.metric small{color:#8f887e;margin-top:3px}
-.business-grid{display:grid;grid-template-columns:1.55fr .85fr;gap:18px}.panel{padding:22px}.panel-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:18px}.panel-heading h3{font:700 23px Georgia,serif;margin:5px 0 0}.panel-heading>strong{font-size:22px;color:#efbd52}.link-button{border:0;background:transparent;color:#efbd52;font-weight:900;cursor:pointer}
-.revenue-chart{height:230px;display:flex;align-items:end;gap:5px;padding-top:20px}.revenue-chart>div{flex:1;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:7px}.revenue-chart span{width:100%;min-height:5px;border-radius:5px 5px 2px 2px;background:linear-gradient(180deg,#f7dc82,#a97124)}.revenue-chart small{font-size:8px;color:#777168}
+.business-grid{display:grid;grid-template-columns:1.55fr .85fr;gap:18px}.panel{padding:22px}.panel-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:18px}.panel-heading h3{font:700 23px Georgia,serif;margin:5px 0 0}.panel-heading strong{font-size:22px;color:#efbd52}.link-button{border:0;background:transparent;color:#efbd52;font-weight:900;cursor:pointer}
+.revenue-chart{height:230px;display:flex;align-items:end;gap:5px;padding-top:20px}.revenue-chart div{flex:1;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:7px}.revenue-chart span{width:100%;min-height:5px;border-radius:5px 5px 2px 2px;background:linear-gradient(180deg,#f7dc82,#a97124)}.revenue-chart small{font-size:8px;color:#777168}
 .indicators{display:grid;align-content:start}.indicator{display:flex;justify-content:space-between;gap:15px;padding:13px 0;border-top:1px solid rgba(255,255,255,.07)}.indicator span{color:#9e978c}.indicator strong{color:#f5e3bd}
 .activity{display:grid;grid-template-columns:42px 1fr auto;gap:11px;align-items:center;padding:11px 0;border-top:1px solid rgba(255,255,255,.06)}.activity:first-of-type{border-top:0}.activity-icon{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:rgba(239,189,82,.09);color:#efbd52;font-size:12px;font-weight:1000}.activity strong,.activity small{display:block}.activity small{color:#8f887e;margin-top:3px}.activity time{font-size:10px;color:#777168}
 .section-heading{padding:24px;display:flex;justify-content:space-between;align-items:center;gap:20px}.section-heading h2{font:700 34px Georgia,serif;margin:6px 0}.section-heading p{color:#9e978c;margin:0}.section-heading input{width:min(340px,100%);border:1px solid rgba(239,189,82,.16);background:rgba(255,255,255,.04);color:#fff;border-radius:13px;padding:13px}
@@ -1237,15 +1380,15 @@ function Style() {
 
 .coupon-admin-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 .coupon-admin-card,.coupon-editor{border:1px solid rgba(239,189,82,.13);background:linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.018));border-radius:22px;box-shadow:0 24px 70px rgba(0,0,0,.22);padding:20px}
-.coupon-admin-head{display:flex;justify-content:space-between;gap:12px}.coupon-admin-head span{font-size:10px;text-transform:uppercase;color:#8dffb2}.coupon-admin-head h3{font:700 29px Georgia,serif;margin:5px 0}.coupon-admin-head>strong{color:#efbd52;font-size:25px}.coupon-admin-card>p{color:#aaa194}
+.coupon-admin-head{display:flex;justify-content:space-between;gap:12px}.coupon-admin-head span{font-size:10px;text-transform:uppercase;color:#8dffb2}.coupon-admin-head h3{font:700 29px Georgia,serif;margin:5px 0}.coupon-admin-head strong{color:#efbd52;font-size:25px}.coupon-admin-card p{color:#aaa194}
 .coupon-admin-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:15px 0}.coupon-admin-meta span{background:rgba(255,255,255,.035);border-radius:11px;padding:10px;color:#8f887e;font-size:11px}.coupon-admin-meta b{display:block;color:#fff3d5;margin-top:4px}
 .coupon-admin-actions,.coupon-editor-actions{display:flex;gap:8px;justify-content:flex-end}.coupon-admin-actions button,.coupon-editor-actions button{border:1px solid rgba(239,189,82,.16);background:rgba(255,255,255,.04);color:#fff;border-radius:11px;padding:10px 13px;font-weight:900;cursor:pointer}.danger-button{color:#ffb1b1!important;border-color:rgba(255,80,80,.2)!important}
 .coupon-form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.coupon-editor label{display:grid;gap:6px;color:#cdbf9d;font-size:12px;font-weight:900;margin:10px 0}.coupon-editor input,.coupon-editor select,.coupon-editor textarea{width:100%;border:1px solid rgba(239,189,82,.15);background:#101513;color:#fff;border-radius:11px;padding:11px}.coupon-editor textarea{min-height:82px}.coupon-switches{display:flex;gap:18px;flex-wrap:wrap;margin:12px 0 18px}
 
 .settings-stack{display:grid;gap:18px}.settings-tabs{display:flex;gap:8px;flex-wrap:wrap}.settings-tabs button{border:1px solid rgba(239,189,82,.15);background:rgba(255,255,255,.04);color:#cfc8bc;border-radius:12px;padding:11px 17px;font-weight:900;cursor:pointer}.settings-tabs button.active{background:linear-gradient(135deg,#c99337,#f7dc82);color:#171005;border-color:transparent}
-.settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.settings-card{border:1px solid rgba(239,189,82,.13);background:linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.018));border-radius:22px;padding:21px;box-shadow:0 24px 70px rgba(0,0,0,.22)}.settings-card-head h3{font:700 25px Georgia,serif;margin:0 0 6px}.settings-card-head p{margin:0;color:#918a80}.settings-fields{display:grid;gap:12px;margin-top:18px}.setting-field{display:grid;gap:7px}.setting-field>span{color:#d9c79e;font-size:12px;font-weight:900}.setting-field input,.setting-field textarea,.setting-field select{width:100%;border:1px solid rgba(239,189,82,.15);background:#101513;color:#fff;border-radius:12px;padding:12px;font:inherit}.setting-field textarea{min-height:110px;resize:vertical}.setting-field select{appearance:auto}.setting-field input[type="range"]{padding:0;background:transparent}.setting-field input:focus,.setting-field textarea:focus,.setting-field select:focus{outline:none;border-color:#efbd52;box-shadow:0 0 0 3px rgba(239,189,82,.1)}
-.setting-toggle{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;border:1px solid rgba(255,255,255,.06);border-radius:13px;padding:12px}.setting-toggle>span{font-weight:900;color:#ddd3c0}.setting-toggle input{display:none}.setting-toggle i{width:42px;height:24px;border-radius:999px;background:#2d322f;position:relative}.setting-toggle i:after{content:"";position:absolute;width:18px;height:18px;border-radius:50%;background:#999;top:3px;left:3px;transition:.2s}.setting-toggle input:checked+i{background:#8d6c29}.setting-toggle input:checked+i:after{left:21px;background:#ffe094}
-.goal-preview{display:grid;gap:12px}.goal-preview>div:not(.goal-track){display:flex;justify-content:space-between;gap:12px;color:#aaa194}.goal-preview strong{color:#fff3d5}.goal-track{height:13px;border-radius:999px;background:#1e2522;overflow:hidden}.goal-track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#c99337,#f7dc82)}.goal-preview>b{color:#efbd52}.integration-status{display:grid;gap:12px}.integration-status p{margin:0;color:#aaa194;line-height:1.55}
+.settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.settings-card{border:1px solid rgba(239,189,82,.13);background:linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.018));border-radius:22px;padding:21px;box-shadow:0 24px 70px rgba(0,0,0,.22)}.settings-card-head h3{font:700 25px Georgia,serif;margin:0 0 6px}.settings-card-head p{margin:0;color:#918a80}.settings-fields{display:grid;gap:12px;margin-top:18px}.setting-field{display:grid;gap:7px}.setting-field span{color:#d9c79e;font-size:12px;font-weight:900}.setting-field input,.setting-field textarea,.setting-field select{width:100%;border:1px solid rgba(239,189,82,.15);background:#101513;color:#fff;border-radius:12px;padding:12px;font:inherit}.setting-field textarea{min-height:110px;resize:vertical}.setting-field select{appearance:auto}.setting-field input[type="range"]{padding:0;background:transparent}.setting-field input:focus,.setting-field textarea:focus,.setting-field select:focus{outline:none;border-color:#efbd52;box-shadow:0 0 0 3px rgba(239,189,82,.1)}
+.setting-toggle{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;border:1px solid rgba(255,255,255,.06);border-radius:13px;padding:12px}.setting-toggle span{font-weight:900;color:#ddd3c0}.setting-toggle input{display:none}.setting-toggle i{width:42px;height:24px;border-radius:999px;background:#2d322f;position:relative}.setting-toggle i:after{content:"";position:absolute;width:18px;height:18px;border-radius:50%;background:#999;top:3px;left:3px;transition:.2s}.setting-toggle input:checked+i{background:#8d6c29}.setting-toggle input:checked+i:after{left:21px;background:#ffe094}
+.goal-preview{display:grid;gap:12px}.goal-preview div:not(.goal-track){display:flex;justify-content:space-between;gap:12px;color:#aaa194}.goal-preview strong{color:#fff3d5}.goal-track{height:13px;border-radius:999px;background:#1e2522;overflow:hidden}.goal-track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#c99337,#f7dc82)}.goal-preview b{color:#efbd52}.pets-admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}.pet-clinic-card{padding:22px;border-radius:20px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035)}.pet-clinic-head{display:flex;justify-content:space-between;gap:15px}.pet-clinic-head h3{margin:5px 0}.pet-clinic-head small,.pet-clinic-head span{color:#9da7b5}.pet-clinic-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0}.pet-clinic-meta span,.clinic-detail-grid span{color:#8f99a8;font-size:12px}.pet-clinic-meta b,.clinic-detail-grid b{display:block;color:#fff;margin-top:4px}.pet-clinic-actions{display:flex;gap:8px;flex-wrap:wrap}.pet-clinic-actions button{min-height:40px;padding:0 13px;border-radius:10px}.rejection{color:#ffb1ba}.pet-modal{width:min(820px,94vw);max-height:92vh;overflow:auto;background:#0c1118;border:1px solid rgba(255,255,255,.12);border-radius:22px;padding:24px}.clinic-detail-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px;border-radius:14px;background:rgba(255,255,255,.035);margin-bottom:18px}.integration-status{display:grid;gap:12px}.integration-status p{margin:0;color:#aaa194;line-height:1.55}
 @media(max-width:1180px){.admin-page{grid-template-columns:220px 1fr}.metric-grid,.plans-grid{grid-template-columns:1fr 1fr}.business-grid{grid-template-columns:1fr}}
 @media(max-width:980px){.coupon-admin-grid{grid-template-columns:1fr 1fr}.coupon-form-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.settings-grid,.coupon-admin-grid,.coupon-form-grid{grid-template-columns:1fr}.admin-page{display:block}.sidebar{height:auto;position:static}.sidebar nav{grid-template-columns:1fr 1fr}.sidebar-footer{display:none}.workspace{padding:20px 14px}.topbar,.welcome,.section-heading{align-items:flex-start;flex-direction:column}.metric-grid,.plans-grid{grid-template-columns:1fr}.first-sale{min-width:0;width:100%}.field-grid{grid-template-columns:1fr}}

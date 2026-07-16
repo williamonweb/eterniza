@@ -23,6 +23,17 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, message: "Senha incorreta." }, { status: 401 });
     }
 
+    if (["CLINIC_MANAGER", "CLINIC_STAFF"].includes(String(user.role || "").toUpperCase())) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "Use a Área da Clínica para entrar no Eterniza Pets.",
+          redirectTo: "/pets/login",
+        },
+        { status: 403 }
+      );
+    }
+
     await setSessionCookie(user);
     return NextResponse.json({ ok: true, user: publicUser(user) });
   } catch (err) {

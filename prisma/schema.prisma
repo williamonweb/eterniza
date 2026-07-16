@@ -4,12 +4,21 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 enum UserRole {
   ADMIN
   CLIENT
+  CLINIC_MANAGER
+  CLINIC_STAFF
+}
+
+enum ClinicStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
 }
 
 enum TributeStatus {
@@ -18,145 +27,259 @@ enum TributeStatus {
   ARCHIVED
 }
 
+enum PetExperienceStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum PetExperienceType {
+  FAREWELL
+  SURGERY
+  RECOVERY
+  DISCHARGE
+  BIRTHDAY
+  ADOPTION
+  VACCINATION
+  CUSTOM
+}
+
 enum CouponDiscountType {
   PERCENT
   FIXED
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String
-  phone     String?
-  cpf       String?
-  role      UserRole @default(CLIENT)
+  id       String   @id @default(cuid())
+  name     String
+  email    String   @unique
+  password String
+  phone    String?
+  cpf      String?
+  role     UserRole @default(CLIENT)
 
-  tributes  Tribute[]
+  tributes       Tribute[]
+  petExperiences PetExperience[] @relation("PetExperienceCreator")
+
+  clinicId String?
+  clinic   Clinic? @relation(fields: [clinicId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([clinicId])
 }
 
 model Tribute {
-  id             String        @id @default(cuid())
-  slug           String        @unique
-  title          String
-  category       String?
-  message        String?       @db.Text
-  music          Json?
-  content        Json?
-  status         TributeStatus @default(DRAFT)
+  id       String        @id @default(cuid())
+  slug     String        @unique
+  title    String
+  category String?
+  message  String?       @db.Text
+  music    Json?
+  content  Json?
+  status   TributeStatus @default(DRAFT)
 
   receiverName   String?
   senderName     String?
   specialDate    DateTime?
   planId         String?
   planName       String?
-  planPriceCents Int           @default(0)
+  planPriceCents Int       @default(0)
   publicUrl      String?
   expiresAt      DateTime?
   publishedAt    DateTime?
 
-  userId         String
-  user           User          @relation(fields: [userId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
-  photos         Photo[]
-  payments       Payment[]
-  views          View[]
+  photos   Photo[]
+  payments Payment[]
+  views    View[]
 
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Photo {
-  id        String  @id @default(cuid())
-  url       String
-  caption   String?
-  order     Int
+  id      String  @id @default(cuid())
+  url     String
+  caption String?
+  order   Int
 
   tributeId String
   tribute   Tribute @relation(fields: [tributeId], references: [id], onDelete: Cascade)
 }
 
 model Payment {
-  id              String   @id @default(cuid())
-  status          String
-  amount          Float
-  originalAmount  Float?
-  discountAmount  Float?
-  couponCode      String?
-  mercadoPagoId   String?
+  id             String  @id @default(cuid())
+  status         String
+  amount         Float
+  originalAmount Float?
+  discountAmount Float?
+  couponCode     String?
+  mercadoPagoId  String?
 
-  tributeId       String
-  tribute         Tribute @relation(fields: [tributeId], references: [id], onDelete: Cascade)
+  tributeId String
+  tribute   Tribute @relation(fields: [tributeId], references: [id], onDelete: Cascade)
 
-  couponId        String?
-  coupon          Coupon? @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  couponId String?
+  coupon   Coupon? @relation(fields: [couponId], references: [id], onDelete: SetNull)
 
-  createdAt       DateTime @default(now())
+  createdAt DateTime @default(now())
 }
 
 model View {
-  id        String   @id @default(cuid())
-  ip        String?
-  city      String?
-  country   String?
+  id      String  @id @default(cuid())
+  ip      String?
+  city    String?
+  country String?
 
   tributeId String
-  tribute   Tribute  @relation(fields: [tributeId], references: [id], onDelete: Cascade)
+  tribute   Tribute @relation(fields: [tributeId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 }
 
 model PlanSetting {
-  id                 String   @id @default(cuid())
-  slug               String   @unique
+  id                 String    @id @default(cuid())
+  slug               String    @unique
   name               String
   description        String?
   priceCents         Int
   originalPriceCents Int?
-  promoActive        Boolean  @default(false)
+  promoActive        Boolean   @default(false)
   promoName          String?
   promoPriceCents    Int?
   promoStartsAt      DateTime?
   promoEndsAt        DateTime?
-  photos             Int      @default(10)
-  duration           String   @default("vitalício")
+  photos             Int       @default(10)
+  duration           String    @default("vitalício")
   features           Json?
-  sortOrder          Int      @default(0)
-  isActive           Boolean  @default(true)
+  sortOrder          Int       @default(0)
+  isActive           Boolean   @default(true)
 
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
-
 
 model Coupon {
-  id              String             @id @default(cuid())
-  code            String             @unique
-  name            String?
-  description     String?
-  discountType    CouponDiscountType
-  discountValue   Int
-  appliesToPlan   String?
-  startsAt        DateTime?
-  endsAt          DateTime?
-  maxUses         Int?
-  usedCount       Int                @default(0)
-  oncePerUser     Boolean            @default(false)
-  isActive        Boolean            @default(true)
+  id            String             @id @default(cuid())
+  code          String             @unique
+  name          String?
+  description   String?
+  discountType  CouponDiscountType
+  discountValue Int
+  appliesToPlan String?
+  startsAt      DateTime?
+  endsAt        DateTime?
+  maxUses       Int?
+  usedCount     Int                @default(0)
+  oncePerUser   Boolean            @default(false)
+  isActive      Boolean            @default(true)
 
-  payments        Payment[]
+  payments Payment[]
 
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
-
 
 model SystemSetting {
   key       String   @id
   group     String
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+model Clinic {
+  id                String  @id @default(cuid())
+  code              String  @unique
+  legalName         String
+  tradeName         String
+  cnpj              String  @unique
+  stateRegistration String?
+  email             String
+  phone             String
+  whatsapp          String?
+  website           String?
+  instagram         String?
+
+  zipCode    String?
+  street     String?
+  number     String?
+  complement String?
+  district   String?
+  city       String?
+  state      String?
+
+  responsibleName  String
+  responsibleRole  String?
+  responsiblePhone String
+  responsibleEmail String
+
+  unitsCount           Int     @default(1)
+  estimatedMonthlyUses Int?
+  referralSource       String?
+  notes                String? @db.Text
+
+  status          ClinicStatus @default(PENDING)
+  rejectionReason String?      @db.Text
+  approvedAt      DateTime?
+  approvedById    String?
+
+  logoUrl             String?
+  primaryColor        String  @default("#277ed4")
+  signature           String?
+  monthlyPackageName  String  @default("Pacote mensal")
+  monthlyPriceCents   Int     @default(0)
+  monthlyTributeLimit Int     @default(0)
+  billingDay          Int     @default(10)
+  showEternizaBrand   Boolean @default(true)
+  showEternizaCta     Boolean @default(true)
+  eternizaCtaText     String  @default("Conheça o Eterniza")
+  eternizaCtaUrl      String  @default("https://eternizas.com.br")
+
+  users          User[]
+  petExperiences PetExperience[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+
+model PetExperience {
+  id           String              @id @default(cuid())
+  slug         String              @unique
+  type         PetExperienceType
+  status       PetExperienceStatus @default(DRAFT)
+
+  petName      String
+  species      String?
+  breed        String?
+  tutorName    String
+  tutorPhone   String?
+  title        String
+  message      String              @db.Text
+  specialDate  DateTime?
+  musicUrl     String?
+  photos       Json?
+  themeColor   String?
+  views        Int                 @default(0)
+
+  clinicId     String
+  clinic       Clinic              @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  createdById  String
+  createdBy    User                @relation("PetExperienceCreator", fields: [createdById], references: [id])
+
+  publishedAt  DateTime?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([clinicId, status])
+  @@index([clinicId, createdAt])
+  @@index([createdById])
 }
