@@ -17,29 +17,29 @@ export async function POST(request) {
     if (!user || !["CLINIC_MANAGER", "CLINIC_STAFF"].includes(String(user.role))) {
       return NextResponse.json({ ok: false, message: "Acesso de clínica não encontrado." }, { status: 401 });
     }
+    if (user.isActive === false) {
+      return NextResponse.json({ ok: false, message: "Seu acesso está desativado. Fale com o administrador da clínica." }, { status: 403 });
+    }
     if (!(await verifyPassword(password, user.password))) {
       return NextResponse.json({ ok: false, message: "Senha incorreta." }, { status: 401 });
     }
-
     if (!user.clinic) {
       return NextResponse.json({ ok: false, message: "Este usuário não está vinculado a uma clínica." }, { status: 403 });
     }
 
     const status = user.clinic.status;
-    if (status === "PENDING") {
-      return NextResponse.json({ ok: false, status, message: "O cadastro da clínica ainda está em análise." }, { status: 403 });
-    }
-    if (status === "REJECTED") {
-      return NextResponse.json({ ok: false, status, message: "O cadastro não foi aprovado. Entre em contato com o Eterniza." }, { status: 403 });
-    }
-    if (status === "SUSPENDED") {
-      return NextResponse.json({ ok: false, status, message: "O acesso da clínica está temporariamente suspenso." }, { status: 403 });
-    }
+    const messages = {
+      PENDING: "O cadastro da clínica ainda está em análise.",
+      REJECTED: "O cadastro não foi aprovado. Entre em contato com o Eterniza.",
+      SUSPENDED: "O acesso da clínica está temporariamente suspenso.",
+    };
     if (status !== "APPROVED") {
-      return NextResponse.json({ ok: false, message: "A clínica não está liberada para acesso." }, { status: 403 });
+      return NextResponse.json({ ok: false, status, message: messages[status] || "A clínica não está liberada para acesso." }, { status: 403 });
     }
 
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     await setSessionCookie(user);
+
     return NextResponse.json({
       ok: true,
       user: publicUser(user),
@@ -51,6 +51,7 @@ export async function POST(request) {
       },
     });
   } catch (error) {
+    console.error("[pets/login]", error);
     return NextResponse.json({ ok: false, message: error.message || "Erro ao entrar." }, { status: 500 });
   }
 }

@@ -152,7 +152,7 @@ export default function PetsPanelPage() {
             >
               <span>{icon}</span>
               <b>{label}</b>
-              {["team", "reports", "settings"].includes(id) && <em>Em breve</em>}
+              {id === "reports" && <em>Em breve</em>}
             </button>
           ))}
         </nav>
@@ -226,7 +226,22 @@ export default function PetsPanelPage() {
           />
         )}
 
-        {["team", "reports", "settings"].includes(active) && (
+        {active === "team" && (
+          <TeamManager
+            currentUser={user}
+            setNotice={setNotice}
+            onChanged={loadDashboard}
+          />
+        )}
+
+        {active === "settings" && (
+          <SettingsManager
+            setNotice={setNotice}
+            onChanged={loadDashboard}
+          />
+        )}
+
+        {active === "reports" && (
           <ComingSoon
             section={active}
             title={sectionTitle}
@@ -1006,6 +1021,415 @@ function ExperiencesList({ items, loading, onReload, setNotice }) {
   );
 }
 
+
+const TEAM_PERMISSION_OPTIONS = [
+  ["experiences.view", "Visualizar experiências"],
+  ["experiences.create", "Criar experiências"],
+  ["experiences.edit", "Editar experiências"],
+  ["experiences.publish", "Publicar experiências"],
+  ["experiences.delete", "Excluir experiências"],
+  ["team.view", "Visualizar equipe"],
+  ["team.manage", "Gerenciar equipe"],
+  ["reports.view", "Acessar relatórios"],
+  ["settings.view", "Visualizar configurações"],
+  ["settings.manage", "Alterar configurações"],
+];
+
+function emptyTeamMember() {
+  return {
+    id: "",
+    name: "",
+    email: "",
+    phone: "",
+    password: "",
+    role: "CLINIC_STAFF",
+    clinicTitle: "Recepção",
+    notes: "",
+    isActive: true,
+    permissions: {
+      experiences: { view: true, create: true, edit: true, publish: true, delete: false },
+      team: { view: false, manage: false },
+      reports: { view: false },
+      settings: { view: false, manage: false },
+    },
+  };
+}
+
+function getPermissionValue(permissions, key) {
+  const [group, action] = key.split(".");
+  return Boolean(permissions?.[group]?.[action]);
+}
+
+function setPermissionValue(permissions, key, value) {
+  const [group, action] = key.split(".");
+  return {
+    ...(permissions || {}),
+    [group]: {
+      ...(permissions?.[group] || {}),
+      [action]: value,
+    },
+  };
+}
+
+function formatTeamPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+function TeamManager({ currentUser, setNotice, onChanged }) {
+  const [members, setMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [canManage, setCanManage] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(currentUser?.id || "");
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState(emptyTeamMember());
+  const [formError, setFormError] = useState("");
+  const [confirmTarget, setConfirmTarget] = useState(null);
+  const [passwordTarget, setPasswordTarget] = useState(null);
+  const [newPassword, setNewPassword] = useState("");
+
+  async function loadTeam() {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/pets/team", { cache: "no-store" });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.message || "Não foi possível carregar a equipe.");
+      setMembers(result.members || []);
+      setCanManage(Boolean(result.canManage));
+      setCurrentUserId(result.currentUserId || currentUser?.id || "");
+    } catch (error) {
+      setNotice({ title: "Não foi possível carregar", text: error.message || "Tente novamente." });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { loadTeam(); }, []);
+
+  const filtered = useMemo(() => {
+    const search = query.trim().toLowerCase();
+    return members.filter((member) => {
+      const statusOk = statusFilter === "ALL" || (statusFilter === "ACTIVE" ? member.isActive : !member.isActive);
+      const searchOk = !search || [member.name, member.email, member.phone, member.clinicTitle]
+        .some((value) => String(value || "").toLowerCase().includes(search));
+      return statusOk && searchOk;
+    });
+  }, [members, query, statusFilter]);
+
+  function openCreate() {
+    setForm(emptyTeamMember());
+    setFormError("");
+    setModal("CREATE");
+  }
+
+  function openEdit(member) {
+    setForm({ ...emptyTeamMember(), ...member, password: "" });
+    setFormError("");
+    setModal("EDIT");
+  }
+
+  async function saveMember() {
+    setSaving(true);
+    setFormError("");
+    try {
+      const editing = modal === "EDIT";
+      const response = await fetch(editing ? `/api/pets/team/${form.id}` : "/api/pets/team", {
+        method: editing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.message || "Não foi possível salvar.");
+      setModal(null);
+      await Promise.all([loadTeam(), onChanged?.()]);
+      setNotice({ title: editing ? "Integrante atualizado" : "Integrante cadastrado", text: "As alterações já estão disponíveis no painel." });
+    } catch (error) {
+      setFormError(error.message || "Não foi possível salvar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleStatus(member) {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/pets/team/${member.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "TOGGLE_STATUS" }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.message || "Não foi possível alterar o acesso.");
+      setConfirmTarget(null);
+      await Promise.all([loadTeam(), onChanged?.()]);
+      setNotice({ title: result.member.isActive ? "Acesso ativado" : "Acesso desativado", text: `${member.name} ${result.member.isActive ? "já pode entrar novamente." : "não poderá mais entrar no painel."}` });
+    } catch (error) {
+      setNotice({ title: "Não foi possível alterar", text: error.message || "Tente novamente." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function resetPassword() {
+    if (!passwordTarget) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/pets/team/${passwordTarget.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "RESET_PASSWORD", password: newPassword }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.message || "Não foi possível alterar a senha.");
+      setPasswordTarget(null);
+      setNewPassword("");
+      setNotice({ title: "Senha atualizada", text: `Uma nova senha foi definida para ${passwordTarget.name}.` });
+    } catch (error) {
+      setNotice({ title: "Não foi possível alterar a senha", text: error.message || "Tente novamente." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="team-shell">
+      <div className="section-heading-pet team-heading">
+        <div><span className="eyebrow">Acessos da clínica</span><h2>Equipe e permissões</h2><p>Cadastre integrantes, defina funções e controle o que cada pessoa pode acessar.</p></div>
+        {canManage && <button className="primary-action" onClick={openCreate}>＋ Novo integrante</button>}
+      </div>
+
+      <div className="team-toolbar">
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por nome, e-mail ou função..." />
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+          <option value="ALL">Todos os acessos</option>
+          <option value="ACTIVE">Somente ativos</option>
+          <option value="INACTIVE">Somente inativos</option>
+        </select>
+        <button className="secondary-action" onClick={loadTeam}>Atualizar</button>
+      </div>
+
+      <div className="team-summary">
+        <div><strong>{members.length}</strong><span>integrantes</span></div>
+        <div><strong>{members.filter((item) => item.isActive).length}</strong><span>ativos</span></div>
+        <div><strong>{members.filter((item) => item.role === "CLINIC_MANAGER" && item.isActive).length}</strong><span>administradores</span></div>
+      </div>
+
+      {loading ? <div className="experience-empty">Carregando equipe...</div> : filtered.length ? (
+        <div className="team-grid">
+          {filtered.map((member) => (
+            <article className={`team-card ${member.isActive ? "" : "inactive"}`} key={member.id}>
+              <div className="team-avatar">{firstName(member.name).slice(0, 1).toUpperCase()}</div>
+              <div className="team-card-main">
+                <div className="team-card-title"><h3>{member.name}</h3><em className={member.isActive ? "active" : "inactive"}>{member.isActive ? "Ativo" : "Inativo"}</em></div>
+                <strong>{member.clinicTitle || (member.role === "CLINIC_MANAGER" ? "Administrador" : "Equipe")}</strong>
+                <a href={`mailto:${member.email}`}>{member.email}</a>
+                {member.phone && <span>{formatTeamPhone(member.phone)}</span>}
+                <small>{member.role === "CLINIC_MANAGER" ? "Administrador da clínica" : "Acesso personalizado"}{member.id === currentUserId ? " · Você" : ""}</small>
+              </div>
+              {canManage && (
+                <div className="team-card-actions">
+                  <button onClick={() => openEdit(member)}>Editar</button>
+                  <button onClick={() => { setPasswordTarget(member); setNewPassword(""); }}>Nova senha</button>
+                  <button className={member.isActive ? "danger-mini" : "success-mini"} disabled={member.id === currentUserId} onClick={() => setConfirmTarget(member)}>{member.isActive ? "Desativar" : "Ativar"}</button>
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      ) : <div className="experience-empty"><span>◉</span><h3>Nenhum integrante encontrado.</h3><p>Ajuste a busca ou cadastre uma nova pessoa.</p></div>}
+
+      {modal && (
+        <div className="team-modal-overlay">
+          <div className="team-modal-card">
+            <div className="team-modal-head"><div><span className="eyebrow">{modal === "EDIT" ? "Editar acesso" : "Novo acesso"}</span><h3>{modal === "EDIT" ? form.name : "Cadastrar integrante"}</h3></div><button onClick={() => setModal(null)}>×</button></div>
+            <div className="team-form-grid">
+              <label>Nome completo<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
+              <label>E-mail de acesso<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
+              <label>Telefone<input inputMode="tel" value={formatTeamPhone(form.phone)} onChange={(event) => setForm({ ...form, phone: event.target.value.replace(/\D/g, "") })} /></label>
+              <label>Função na clínica<input value={form.clinicTitle} onChange={(event) => setForm({ ...form, clinicTitle: event.target.value })} placeholder="Ex.: Veterinário, Recepção" /></label>
+              <label>Perfil de acesso<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}><option value="CLINIC_STAFF">Integrante da equipe</option><option value="CLINIC_MANAGER">Administrador</option></select></label>
+              {modal === "CREATE" && <label>Senha inicial<input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} /></label>}
+              <label className="team-notes">Observações internas<textarea rows="3" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
+            </div>
+
+            <div className="permission-box">
+              <div><strong>Permissões</strong><small>Administradores recebem todas as permissões automaticamente.</small></div>
+              <div className="permission-grid">
+                {TEAM_PERMISSION_OPTIONS.map(([key, label]) => (
+                  <label key={key} className={form.role === "CLINIC_MANAGER" ? "disabled" : ""}>
+                    <input type="checkbox" disabled={form.role === "CLINIC_MANAGER"} checked={form.role === "CLINIC_MANAGER" || getPermissionValue(form.permissions, key)} onChange={(event) => setForm({ ...form, permissions: setPermissionValue(form.permissions, key, event.target.checked) })} />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            {formError && <div className="wizard-error">{formError}</div>}
+            <div className="team-modal-actions"><button className="secondary-action" disabled={saving} onClick={() => setModal(null)}>Cancelar</button><button className="primary-action" disabled={saving} onClick={saveMember}>{saving ? "Salvando..." : "Salvar integrante"}</button></div>
+          </div>
+        </div>
+      )}
+
+      {confirmTarget && (
+        <div className="delete-confirm-overlay"><div className="delete-confirm-card"><span>{confirmTarget.isActive ? "🔒" : "🔓"}</span><h3>{confirmTarget.isActive ? "Desativar acesso?" : "Ativar acesso?"}</h3><p><b>{confirmTarget.name}</b> {confirmTarget.isActive ? "não poderá mais entrar no painel até ser ativado novamente." : "voltará a poder acessar o painel da clínica."}</p><div><button className="secondary-action" disabled={saving} onClick={() => setConfirmTarget(null)}>Cancelar</button><button className={confirmTarget.isActive ? "delete-confirm-button" : "primary-action"} disabled={saving} onClick={() => toggleStatus(confirmTarget)}>{saving ? "Aguarde..." : confirmTarget.isActive ? "Desativar acesso" : "Ativar acesso"}</button></div></div></div>
+      )}
+
+      {passwordTarget && (
+        <div className="team-modal-overlay"><div className="team-password-card"><span>🔑</span><h3>Definir nova senha</h3><p>Crie uma nova senha para <b>{passwordTarget.name}</b>.</p><input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="Mínimo de 6 caracteres" autoFocus /><div><button className="secondary-action" disabled={saving} onClick={() => setPasswordTarget(null)}>Cancelar</button><button className="primary-action" disabled={saving || newPassword.length < 6} onClick={resetPassword}>{saving ? "Salvando..." : "Atualizar senha"}</button></div></div></div>
+      )}
+    </section>
+  );
+}
+
+function SettingsManager({ setNotice, onChanged }) {
+  const [settings, setSettings] = useState(null);
+  const [form, setForm] = useState(null);
+  const [tab, setTab] = useState("clinic");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [password, setPassword] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+
+  async function loadSettings() {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/pets/settings", { cache: "no-store" });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.message || "Não foi possível carregar as configurações.");
+      setSettings(result.settings);
+      setForm(result.settings);
+    } catch (err) {
+      setError(err.message || "Não foi possível carregar as configurações.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { loadSettings(); }, []);
+
+  function update(field, value) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function saveSettings() {
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch("/api/pets/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.message || "Não foi possível salvar.");
+      setSettings(result.settings);
+      setForm(result.settings);
+      await onChanged?.();
+      setNotice({ title: "Configurações atualizadas", text: "Os dados da clínica já foram salvos e estão ativos no painel." });
+    } catch (err) {
+      setError(err.message || "Não foi possível salvar as configurações.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function changePassword() {
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch("/api/pets/settings/password", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(password),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.message || "Não foi possível alterar a senha.");
+      setPassword({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setNotice({ title: "Senha atualizada", text: "Sua nova senha já está ativa para os próximos acessos." });
+    } catch (err) {
+      setError(err.message || "Não foi possível alterar a senha.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) return <div className="experience-empty">Carregando configurações...</div>;
+  if (!form) return <div className="experience-empty"><span>⚙</span><h3>Configurações indisponíveis</h3><p>{error || "Você não possui acesso a esta área."}</p></div>;
+
+  const canManage = Boolean(settings?.canManage);
+  const tabs = [
+    ["clinic", "🏥", "Clínica"],
+    ["branding", "🎨", "Aparência"],
+    ["preferences", "✨", "Preferências"],
+    ["security", "🔐", "Segurança"],
+    ["plan", "💳", "Plano"],
+  ];
+
+  return (
+    <section className="settings-shell">
+      <div className="section-heading-pet settings-heading">
+        <div><span className="eyebrow">Personalização e conta</span><h2>Configurações da clínica</h2><p>Atualize os dados exibidos no painel e nas experiências enviadas aos tutores.</p></div>
+        {canManage && tab !== "security" && tab !== "plan" && <button className="primary-action" disabled={saving} onClick={saveSettings}>{saving ? "Salvando..." : "Salvar alterações"}</button>}
+      </div>
+
+      <div className="settings-layout">
+        <nav className="settings-tabs">
+          {tabs.map(([id, icon, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => { setTab(id); setError(""); }}><span>{icon}</span><b>{label}</b></button>)}
+        </nav>
+
+        <div className="settings-content">
+          {error && <div className="wizard-error settings-error">{error}</div>}
+
+          {tab === "clinic" && <div className="settings-card"><div className="settings-card-head"><span>🏥</span><div><h3>Dados da clínica</h3><p>Informações institucionais, contatos e endereço.</p></div></div><div className="settings-form-grid">
+            <label>Nome fantasia *<input disabled={!canManage} value={form.tradeName || ""} onChange={(e) => update("tradeName", e.target.value)} /></label>
+            <label>Razão social *<input disabled={!canManage} value={form.legalName || ""} onChange={(e) => update("legalName", e.target.value)} /></label>
+            <label>CNPJ<input disabled value={form.cnpj || ""} /></label>
+            <label>Inscrição estadual<input disabled={!canManage} value={form.stateRegistration || ""} onChange={(e) => update("stateRegistration", e.target.value)} /></label>
+            <label>E-mail *<input type="email" disabled={!canManage} value={form.email || ""} onChange={(e) => update("email", e.target.value)} /></label>
+            <label>Telefone *<input disabled={!canManage} value={form.phone || ""} onChange={(e) => update("phone", e.target.value)} /></label>
+            <label>WhatsApp<input disabled={!canManage} value={form.whatsapp || ""} onChange={(e) => update("whatsapp", e.target.value)} /></label>
+            <label>Instagram<input disabled={!canManage} value={form.instagram || ""} onChange={(e) => update("instagram", e.target.value)} placeholder="@suaclinica" /></label>
+            <label className="settings-wide">Site<input disabled={!canManage} value={form.website || ""} onChange={(e) => update("website", e.target.value)} placeholder="https://" /></label>
+            <label>CEP<input disabled={!canManage} value={form.zipCode || ""} onChange={(e) => update("zipCode", e.target.value)} /></label>
+            <label>Rua<input disabled={!canManage} value={form.street || ""} onChange={(e) => update("street", e.target.value)} /></label>
+            <label>Número<input disabled={!canManage} value={form.number || ""} onChange={(e) => update("number", e.target.value)} /></label>
+            <label>Complemento<input disabled={!canManage} value={form.complement || ""} onChange={(e) => update("complement", e.target.value)} /></label>
+            <label>Bairro<input disabled={!canManage} value={form.district || ""} onChange={(e) => update("district", e.target.value)} /></label>
+            <label>Cidade<input disabled={!canManage} value={form.city || ""} onChange={(e) => update("city", e.target.value)} /></label>
+            <label>UF<input maxLength="2" disabled={!canManage} value={form.state || ""} onChange={(e) => update("state", e.target.value.toUpperCase())} /></label>
+          </div><div className="settings-divider"/><div className="settings-card-head compact"><span>👤</span><div><h3>Responsável</h3><p>Contato principal da conta da clínica.</p></div></div><div className="settings-form-grid">
+            <label>Nome *<input disabled={!canManage} value={form.responsibleName || ""} onChange={(e) => update("responsibleName", e.target.value)} /></label>
+            <label>Cargo<input disabled={!canManage} value={form.responsibleRole || ""} onChange={(e) => update("responsibleRole", e.target.value)} /></label>
+            <label>Telefone *<input disabled={!canManage} value={form.responsiblePhone || ""} onChange={(e) => update("responsiblePhone", e.target.value)} /></label>
+            <label>E-mail *<input type="email" disabled={!canManage} value={form.responsibleEmail || ""} onChange={(e) => update("responsibleEmail", e.target.value)} /></label>
+          </div></div>}
+
+          {tab === "branding" && <div className="settings-card"><div className="settings-card-head"><span>🎨</span><div><h3>Identidade visual</h3><p>Defina como a clínica aparece no painel e nas experiências.</p></div></div><div className="branding-settings-grid"><div className="settings-form-grid single">
+            <label>URL do logotipo<input disabled={!canManage} value={form.logoUrl || ""} onChange={(e) => update("logoUrl", e.target.value)} placeholder="https://.../logo.png" /></label>
+            <label>Cor principal<div className="color-field"><input type="color" disabled={!canManage} value={form.primaryColor || "#277ed4"} onChange={(e) => update("primaryColor", e.target.value)} /><input disabled={!canManage} value={form.primaryColor || "#277ed4"} onChange={(e) => update("primaryColor", e.target.value)} /></div></label>
+            <label>Assinatura da clínica<textarea rows="4" disabled={!canManage} value={form.signature || ""} onChange={(e) => update("signature", e.target.value)} placeholder="Uma mensagem curta exibida ao tutor." /></label>
+          </div><div className="settings-brand-preview" style={{ "--preview-color": form.primaryColor || "#277ed4" }}><small>Prévia</small><div className="settings-preview-logo">{form.logoUrl ? <img src={form.logoUrl} alt="Logo da clínica" /> : <span>🏥</span>}</div><h3>{form.tradeName || "Sua clínica"}</h3><p>{form.signature || "Cuidado que permanece em cada lembrança."}</p><button>Ver experiência</button></div></div></div>}
+
+          {tab === "preferences" && <div className="settings-card"><div className="settings-card-head"><span>✨</span><div><h3>Preferências de exibição</h3><p>Controle as marcas e chamadas exibidas nas experiências.</p></div></div><div className="settings-switches">
+            <label><input type="checkbox" disabled={!canManage} checked={form.showEternizaBrand !== false} onChange={(e) => update("showEternizaBrand", e.target.checked)} /><span><strong>Exibir parceria com o Eterniza</strong><small>Mostra a assinatura “Em parceria com Eterniza Pets”.</small></span></label>
+            <label><input type="checkbox" disabled={!canManage} checked={form.showEternizaCta !== false} onChange={(e) => update("showEternizaCta", e.target.checked)} /><span><strong>Exibir chamada para conhecer o Eterniza</strong><small>Inclui um botão discreto no fim da experiência.</small></span></label>
+          </div><div className="settings-form-grid settings-preference-fields"><label>Texto da chamada<input disabled={!canManage || form.showEternizaCta === false} value={form.eternizaCtaText || ""} onChange={(e) => update("eternizaCtaText", e.target.value)} /></label><label>Link da chamada<input disabled={!canManage || form.showEternizaCta === false} value={form.eternizaCtaUrl || ""} onChange={(e) => update("eternizaCtaUrl", e.target.value)} /></label></div></div>}
+
+          {tab === "security" && <div className="settings-card security-card"><div className="settings-card-head"><span>🔐</span><div><h3>Alterar minha senha</h3><p>A alteração afeta somente o seu próprio acesso.</p></div></div><div className="settings-form-grid single password-settings"><label>Senha atual<input type="password" value={password.currentPassword} onChange={(e) => setPassword({ ...password, currentPassword: e.target.value })} /></label><label>Nova senha<input type="password" value={password.newPassword} onChange={(e) => setPassword({ ...password, newPassword: e.target.value })} placeholder="Mínimo de 6 caracteres" /></label><label>Confirmar nova senha<input type="password" value={password.confirmPassword} onChange={(e) => setPassword({ ...password, confirmPassword: e.target.value })} /></label><button className="primary-action" disabled={saving || !password.currentPassword || password.newPassword.length < 6 || password.newPassword !== password.confirmPassword} onClick={changePassword}>{saving ? "Alterando..." : "Alterar minha senha"}</button></div></div>}
+
+          {tab === "plan" && <div className="settings-card"><div className="settings-card-head"><span>💳</span><div><h3>Plano contratado</h3><p>Informações comerciais administradas pelo Eterniza.</p></div></div><div className="plan-settings-hero"><div><small>Pacote atual</small><h3>{form.monthlyPackageName || "Pacote mensal"}</h3><strong>{moneyFromCents(form.monthlyPriceCents)}</strong></div><em>{form.status === "APPROVED" ? "Ativo" : form.status}</em></div><div className="plan-settings-grid"><div><span>Limite mensal</span><strong>{Number(form.monthlyTributeLimit || 0) > 0 ? `${form.monthlyTributeLimit} experiências` : "A definir"}</strong></div><div><span>Dia de vencimento</span><strong>Dia {form.billingDay || 10}</strong></div><div><span>Código da clínica</span><strong>{form.code}</strong></div></div><p className="plan-readonly-note">Para alterar pacote, limite ou cobrança, entre em contato com o atendimento do Eterniza.</p></div>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ComingSoon({ section, title, onBack }) {
   const content = {
     new: ["Qual momento deseja eternizar?", "O assistente de criação entra na v60.2."],
@@ -1031,7 +1455,7 @@ function ComingSoon({ section, title, onBack }) {
 
 function Style() {
   return (
-    <style>{`
+    <style suppressHydrationWarning dangerouslySetInnerHTML={{ __html: `
       :root{color-scheme:dark}
       *{box-sizing:border-box}
       body{margin:0;background:#030a10}
@@ -1136,6 +1560,10 @@ function Style() {
       .brand-partnership span{font-size:10px;color:#78909f;text-transform:uppercase;letter-spacing:.08em}
       .brand-partnership b{margin-top:6px;color:#89ceff}
       .full{width:100%}
+
+      .team-shell{max-width:1440px;margin:25px auto 0}.team-heading{align-items:flex-end}.team-toolbar{display:grid;grid-template-columns:1fr 220px auto;gap:10px;margin-top:20px}.team-toolbar input,.team-toolbar select,.team-form-grid input,.team-form-grid select,.team-form-grid textarea,.team-password-card input{width:100%;min-height:46px;border:1px solid rgba(255,255,255,.12);background:#07131d;color:#fff;border-radius:13px;padding:12px 14px;outline:none}.team-toolbar input:focus,.team-toolbar select:focus,.team-form-grid input:focus,.team-form-grid select:focus,.team-form-grid textarea:focus,.team-password-card input:focus{border-color:var(--pet-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--pet-accent) 14%,transparent)}.team-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin-top:14px}.team-summary div{padding:16px 18px;border-radius:16px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)}.team-summary strong,.team-summary span{display:block}.team-summary strong{font-size:26px}.team-summary span{color:#8297a5;font-size:11px;margin-top:3px}.team-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:15px}.team-card{display:grid;grid-template-columns:58px 1fr;gap:14px;padding:18px;border-radius:19px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.032)}.team-card.inactive{opacity:.67}.team-avatar{width:58px;height:58px;display:grid;place-items:center;border-radius:17px;background:linear-gradient(135deg,var(--pet-accent),#9bd7ff);color:#03101a;font-size:23px;font-weight:1000}.team-card-main{min-width:0}.team-card-title{display:flex;align-items:center;justify-content:space-between;gap:10px}.team-card-title h3{font:700 22px Georgia,serif;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.team-card-title em{padding:5px 8px;border-radius:999px;font-size:9px;font-style:normal;font-weight:1000}.team-card-title em.active{background:rgba(70,220,145,.12);color:#8ff0bd}.team-card-title em.inactive{background:rgba(255,90,110,.12);color:#ffadb7}.team-card-main>strong,.team-card-main>a,.team-card-main>span,.team-card-main>small{display:block}.team-card-main>strong{color:#8bd0ff;margin-top:5px;font-size:12px}.team-card-main>a,.team-card-main>span{color:#a8bac5;text-decoration:none;margin-top:5px;font-size:12px}.team-card-main>small{color:#728894;margin-top:8px}.team-card-actions{grid-column:1/-1;display:flex;gap:7px;justify-content:flex-end;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)}.team-card-actions button{min-height:38px;padding:0 12px;border:1px solid rgba(255,255,255,.11);border-radius:10px;background:rgba(255,255,255,.045);color:#fff;font-weight:900}.team-card-actions .danger-mini{color:#ff9ca8}.team-card-actions .success-mini{color:#8ff0bd}.team-card-actions button:disabled{opacity:.35;cursor:not-allowed}.team-modal-overlay{position:fixed;inset:0;display:grid;place-items:center;padding:20px;background:rgba(0,0,0,.72);z-index:170;overflow:auto}.team-modal-card{width:min(820px,100%);max-height:calc(100vh - 40px);overflow:auto;padding:26px;border-radius:23px;border:1px solid rgba(255,255,255,.12);background:#0b151e;box-shadow:0 35px 100px rgba(0,0,0,.5)}.team-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.team-modal-head h3{font:700 31px Georgia,serif;margin:6px 0}.team-modal-head>button{width:40px;height:40px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(255,255,255,.04);color:#fff;font-size:24px}.team-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}.team-form-grid label{display:grid;gap:7px;color:#dce7ed;font-size:12px;font-weight:900}.team-form-grid .team-notes{grid-column:1/-1}.permission-box{margin-top:18px;padding:17px;border-radius:17px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.025)}.permission-box>div:first-child strong,.permission-box>div:first-child small{display:block}.permission-box>div:first-child small{color:#8297a5;margin-top:4px}.permission-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}.permission-grid label{display:flex;align-items:center;gap:9px;min-height:42px;padding:9px 11px;border-radius:11px;background:rgba(255,255,255,.035);font-size:12px}.permission-grid label.disabled{opacity:.65}.permission-grid input{accent-color:var(--pet-accent)}.team-modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.team-password-card{width:min(430px,100%);padding:28px;text-align:center;border-radius:23px;border:1px solid rgba(255,255,255,.12);background:#0b151e}.team-password-card>span{font-size:42px}.team-password-card h3{font:700 29px Georgia,serif;margin:10px 0}.team-password-card p{color:#93a8b5;line-height:1.5}.team-password-card p b{color:#fff}.team-password-card>div{display:flex;justify-content:center;gap:9px;margin-top:15px}
+
+      .settings-shell{max-width:1440px;margin:25px auto 0}.settings-heading{align-items:flex-end}.settings-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:16px;margin-top:20px}.settings-tabs{display:grid;align-content:start;gap:7px;padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:19px;background:rgba(255,255,255,.025);height:max-content}.settings-tabs button{display:flex;align-items:center;gap:10px;min-height:48px;padding:0 13px;border:1px solid transparent;border-radius:13px;background:transparent;color:#8fa5b2;text-align:left}.settings-tabs button.active{color:#fff;border-color:color-mix(in srgb,var(--pet-accent) 35%,transparent);background:color-mix(in srgb,var(--pet-accent) 12%,#07131d)}.settings-tabs span{font-size:18px}.settings-content{min-width:0}.settings-card{padding:24px;border-radius:22px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.032)}.settings-card-head{display:flex;align-items:center;gap:13px;margin-bottom:20px}.settings-card-head>span{width:48px;height:48px;display:grid;place-items:center;border-radius:14px;background:color-mix(in srgb,var(--pet-accent) 14%,#07131d);font-size:22px}.settings-card-head h3{font:700 27px Georgia,serif;margin:0}.settings-card-head p{color:#879ba8;margin:5px 0 0}.settings-card-head.compact{margin-top:20px}.settings-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}.settings-form-grid.single{grid-template-columns:1fr}.settings-form-grid label{display:grid;gap:7px;color:#dce7ed;font-size:12px;font-weight:900}.settings-form-grid input,.settings-form-grid textarea{width:100%;min-height:47px;padding:12px 14px;border:1px solid rgba(255,255,255,.12);border-radius:13px;background:#07131d;color:#fff;outline:none}.settings-form-grid input:focus,.settings-form-grid textarea:focus{border-color:var(--pet-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--pet-accent) 14%,transparent)}.settings-form-grid input:disabled,.settings-form-grid textarea:disabled{opacity:.6;cursor:not-allowed}.settings-wide{grid-column:1/-1}.settings-divider{height:1px;background:rgba(255,255,255,.08);margin:25px 0}.branding-settings-grid{display:grid;grid-template-columns:1fr 340px;gap:20px}.color-field{display:grid;grid-template-columns:64px 1fr;gap:8px}.color-field input[type=color]{padding:5px}.settings-brand-preview{display:grid;place-items:center;align-content:center;text-align:center;min-height:370px;padding:24px;border-radius:19px;background:radial-gradient(circle at 50% 20%,color-mix(in srgb,var(--preview-color) 28%,transparent),transparent 43%),#07131d;border:1px solid rgba(255,255,255,.08)}.settings-brand-preview>small{text-transform:uppercase;letter-spacing:.08em;color:#78909f}.settings-preview-logo{width:90px;height:90px;display:grid;place-items:center;margin:20px 0 8px;border-radius:23px;background:#fff;overflow:hidden;font-size:34px}.settings-preview-logo img{width:100%;height:100%;object-fit:contain}.settings-brand-preview h3{font:700 28px Georgia,serif;margin:8px}.settings-brand-preview p{color:#98acb8;line-height:1.5}.settings-brand-preview button{min-height:43px;padding:0 16px;border:0;border-radius:12px;background:var(--preview-color);color:#fff;font-weight:1000}.settings-switches{display:grid;gap:10px}.settings-switches>label{display:flex;align-items:center;gap:13px;padding:16px;border-radius:15px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07)}.settings-switches input{width:20px;height:20px;accent-color:var(--pet-accent)}.settings-switches strong,.settings-switches small{display:block}.settings-switches small{color:#8398a5;margin-top:4px}.settings-preference-fields{margin-top:16px}.password-settings{max-width:560px}.password-settings button{justify-self:start}.plan-settings-hero{display:flex;align-items:flex-start;justify-content:space-between;padding:23px;border-radius:18px;background:linear-gradient(135deg,color-mix(in srgb,var(--pet-accent) 16%,#07131d),#07131d)}.plan-settings-hero small,.plan-settings-hero h3,.plan-settings-hero strong{display:block}.plan-settings-hero h3{font:700 31px Georgia,serif;margin:7px 0}.plan-settings-hero strong{font-size:22px;color:#9bd7ff}.plan-settings-hero em{padding:7px 11px;border-radius:999px;background:rgba(70,220,145,.12);color:#8ff0bd;font-style:normal;font-size:11px;font-weight:1000}.plan-settings-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px;margin-top:14px}.plan-settings-grid div{padding:16px;border-radius:15px;background:rgba(255,255,255,.03)}.plan-settings-grid span,.plan-settings-grid strong{display:block}.plan-settings-grid span{color:#8095a2;font-size:11px}.plan-settings-grid strong{margin-top:6px}.plan-readonly-note{color:#8297a5;margin:18px 0 0}.settings-error{margin:0 0 14px}
       .coming-soon{max-width:820px;margin:60px auto 0;text-align:center;padding:35px;border-radius:26px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.035)}
       .coming-soon img{width:min(100%,430px);max-height:250px;object-fit:contain;border-radius:20px}
       .coming-soon span{display:block;color:#78c5ff;font-size:11px;font-weight:1000;text-transform:uppercase;letter-spacing:.08em;margin-top:20px}
@@ -1185,6 +1613,8 @@ function Style() {
         .package-numbers{grid-template-columns:1fr}
         .package-footer{display:grid}
       }
-    `}</style>
+
+      @media(max-width:760px){.settings-layout{grid-template-columns:1fr}.settings-tabs{grid-template-columns:repeat(5,1fr);overflow:auto}.settings-tabs button{justify-content:center;padding:0 10px}.settings-tabs b{display:none}.branding-settings-grid{grid-template-columns:1fr}.settings-form-grid,.plan-settings-grid{grid-template-columns:1fr}.settings-wide{grid-column:auto}.settings-heading{align-items:flex-start;flex-direction:column}.settings-heading button{width:100%}.team-grid{grid-template-columns:1fr}.team-toolbar{grid-template-columns:1fr}.team-summary{grid-template-columns:1fr}.team-form-grid,.permission-grid{grid-template-columns:1fr}.team-form-grid .team-notes{grid-column:auto}.team-card-actions{justify-content:flex-start;flex-wrap:wrap}.team-modal-actions,.team-password-card>div{flex-direction:column}.team-modal-actions button,.team-password-card>div button{width:100%}}
+    ` }} />
   );
 }

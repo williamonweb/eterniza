@@ -30,6 +30,7 @@ export async function GET() {
                 name: true,
                 email: true,
                 role: true,
+                isActive: true,
                 createdAt: true,
               },
               orderBy: { createdAt: "asc" },
@@ -41,6 +42,7 @@ export async function GET() {
 
     if (
       !user ||
+      user.isActive === false ||
       !["CLINIC_MANAGER", "CLINIC_STAFF"].includes(String(user.role)) ||
       user.clinic?.status !== "APPROVED"
     ) {
@@ -172,7 +174,7 @@ export async function GET() {
           draftThisMonth: usage.draftThisMonth,
           total: usage.total,
           viewsThisMonth: usage.viewsThisMonth,
-          teamMembers: clinic.users.length,
+          teamMembers: clinic.users.filter((member) => member.isActive !== false).length,
         },
         team: clinic.users,
         recent: usage.recent,

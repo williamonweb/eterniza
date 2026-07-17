@@ -12,7 +12,7 @@ export async function GET() {
       include: { clinic: true },
     });
 
-    if (!user || !["CLINIC_MANAGER", "CLINIC_STAFF"].includes(String(user.role)) || user.clinic?.status !== "APPROVED") {
+    if (!user || user.isActive === false || !["CLINIC_MANAGER", "CLINIC_STAFF"].includes(String(user.role)) || user.clinic?.status !== "APPROVED") {
       return NextResponse.json({ ok: false, message: "Acesso de clínica não autorizado." }, { status: 403 });
     }
 

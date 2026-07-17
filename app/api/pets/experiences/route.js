@@ -81,6 +81,7 @@ export async function GET() {
 
     if (
       !user ||
+      user.isActive === false ||
       !["CLINIC_MANAGER", "CLINIC_STAFF"].includes(String(user.role)) ||
       user.clinic?.status !== "APPROVED"
     ) {
@@ -108,6 +109,7 @@ export async function POST(request) {
 
     if (
       !user ||
+      user.isActive === false ||
       !["CLINIC_MANAGER", "CLINIC_STAFF"].includes(String(user.role)) ||
       user.clinic?.status !== "APPROVED"
     ) {
