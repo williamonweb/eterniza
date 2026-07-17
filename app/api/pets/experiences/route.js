@@ -62,9 +62,13 @@ function publicItem(item) {
     specialDate: item.specialDate,
     musicUrl: item.musicUrl,
     photos: Array.isArray(item.photos) ? item.photos : [],
+    storyAnswers: item.storyAnswers && typeof item.storyAnswers === "object" ? item.storyAnswers : {},
+    storyData: item.storyData && typeof item.storyData === "object" ? item.storyData : null,
     themeColor: item.themeColor,
     views: item.views,
     publishedAt: item.publishedAt,
+    countedAt: item.countedAt,
+    deletedAt: item.deletedAt,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     publicUrl: `/pets/experiencia/${item.slug}`,
@@ -84,7 +88,7 @@ export async function GET() {
     }
 
     const experiences = await prisma.petExperience.findMany({
-      where: { clinicId: user.clinic.id },
+      where: { clinicId: user.clinic.id, deletedAt: null },
       orderBy: { updatedAt: "desc" },
     });
 
@@ -118,6 +122,8 @@ export async function POST(request) {
     const message = String(body.message || "").trim();
     const title = String(body.title || "").trim() || `Um momento especial de ${petName}`;
     const photos = Array.isArray(body.photos) ? body.photos.slice(0, 5) : [];
+    const storyAnswers = body.storyAnswers && typeof body.storyAnswers === "object" ? body.storyAnswers : {};
+    const storyData = body.storyData && typeof body.storyData === "object" ? body.storyData : null;
 
     if (!allowedTypes.has(type)) {
       return NextResponse.json({ ok: false, message: "Tipo de experiência inválido." }, { status: 400 });
@@ -140,8 +146,10 @@ export async function POST(request) {
       const used = await prisma.petExperience.count({
         where: {
           clinicId: user.clinic.id,
-          status: "PUBLISHED",
-          publishedAt: { gte: monthStart },
+          OR: [
+            { countedAt: { gte: monthStart } },
+            { countedAt: null, publishedAt: { gte: monthStart } },
+          ],
         },
       });
 
@@ -168,10 +176,13 @@ export async function POST(request) {
         specialDate: parseDate(body.specialDate),
         musicUrl: String(body.musicUrl || "").trim() || null,
         photos,
+        storyAnswers,
+        storyData,
         themeColor: String(body.themeColor || user.clinic.primaryColor || "#277ed4"),
         clinicId: user.clinic.id,
         createdById: user.id,
         publishedAt: publish ? new Date() : null,
+        countedAt: publish ? new Date() : null,
       },
     });
 

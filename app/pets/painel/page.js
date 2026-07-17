@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import PetStoryExperience from "../../../components/pets/PetStoryExperience";
+import { EXPERIENCE_TYPES, buildPetStory, getStoryDefaults, getStoryQuestions } from "../../../lib/pets/story-engine";
 
 const NAV_ITEMS = [
   ["dashboard", "▦", "Dashboard"],
@@ -324,7 +325,7 @@ function Dashboard({ data, onNavigate }) {
 
           <div className="package-numbers">
             <div>
-              <span>Utilizadas</span>
+              <span>Consumidas</span>
               <strong>{packageInfo.used || 0}</strong>
             </div>
             <div>
@@ -461,27 +462,35 @@ function QuickAction({ icon, title, text, onClick }) {
 }
 
 
-const EXPERIENCE_TYPES = [
-  { id:"FAREWELL", icon:"🌈", title:"Despedida", text:"Uma homenagem delicada e cheia de amor." },
-  { id:"SURGERY", icon:"🩺", title:"Cirurgia", text:"Carinho antes ou depois de um procedimento." },
-  { id:"RECOVERY", icon:"❤️", title:"Recuperação", text:"Celebre cada pequena vitória." },
-  { id:"DISCHARGE", icon:"🏥", title:"Alta hospitalar", text:"A alegria de voltar para casa." },
-  { id:"BIRTHDAY", icon:"🎂", title:"Aniversário", text:"Um dia especial para celebrar." },
-  { id:"ADOPTION", icon:"🏠", title:"Adoção", text:"O começo de uma nova família." },
-  { id:"VACCINATION", icon:"💉", title:"Vacinação", text:"Cuidado e prevenção também são amor." },
-  { id:"CUSTOM", icon:"✨", title:"Personalizada", text:"Crie uma mensagem para qualquer momento." },
-];
 
-const DEFAULT_MESSAGES = {
-  FAREWELL: "Alguns companheiros deixam marcas que o tempo jamais apaga. Que cada lembrança traga conforto e mantenha vivo todo o amor compartilhado.",
-  SURGERY: "Hoje começa uma nova etapa. Toda a nossa equipe deseja uma recuperação tranquila, cercada de cuidado, carinho e muitos momentos felizes.",
-  RECOVERY: "Cada avanço merece ser celebrado. Estamos muito felizes em acompanhar essa recuperação e desejamos que os próximos dias sejam ainda melhores.",
-  DISCHARGE: "Chegou a hora de voltar para casa! Foi uma alegria cuidar com tanto carinho. Desejamos uma recuperação tranquila e muitos momentos felizes em família.",
-  BIRTHDAY: "Hoje celebramos uma vida que transforma todos os dias em momentos mais felizes. Feliz aniversário e muitos anos de amor e aventuras!",
-  ADOPTION: "Hoje começa uma história linda: a história de uma família que se encontrou. Que esta nova jornada seja repleta de amor, segurança e alegria.",
-  VACCINATION: "Cuidar também é amar. Hoje foi dado mais um passo importante para uma vida longa, saudável e cheia de bons momentos.",
-  CUSTOM: "Preparamos esta mensagem com carinho para eternizar um momento muito especial.",
-};
+
+function specialDateLabel(type) {
+  const labels = {
+    FAREWELL: "Data da despedida (opcional)",
+    SURGERY: "Data da cirurgia (opcional)",
+    RECOVERY: "Data da recuperação (opcional)",
+    DISCHARGE: "Data da alta (opcional)",
+    BIRTHDAY: "Data do aniversário (opcional)",
+    ADOPTION: "Data da adoção (opcional)",
+    VACCINATION: "Data da vacinação (opcional)",
+    CUSTOM: "Data do momento (opcional)",
+  };
+  return labels[type] || "Data do momento (opcional)";
+}
+
+function specialDateHelp(type) {
+  const helps = {
+    FAREWELL: "Quando aconteceu a despedida.",
+    SURGERY: "Quando o procedimento foi realizado.",
+    RECOVERY: "Quando essa etapa da recuperação aconteceu.",
+    DISCHARGE: "Quando o pet recebeu alta.",
+    BIRTHDAY: "A data do aniversário ou comemoração.",
+    ADOPTION: "Quando o pet chegou à nova família.",
+    VACCINATION: "Quando a vacinação foi realizada.",
+    CUSTOM: "Uma data ligada ao momento eternizado.",
+  };
+  return helps[type] || helps.CUSTOM;
+}
 
 function emptyExperience() {
   return {
@@ -497,6 +506,8 @@ function emptyExperience() {
     musicUrl: "",
     themeColor: "#277ed4",
     photos: [],
+    storyAnswers: {},
+    storyData: null,
   };
 }
 
@@ -539,14 +550,49 @@ function NewExperienceWizard({ clinic, packageInfo, onSaved }) {
   }
 
   function selectType(type) {
-    update("type", type.id);
+    const defaults = getStoryDefaults(type.id, {
+      petName: form.petName,
+      storyAnswers: {},
+    });
     setForm((current) => ({
       ...current,
       type: type.id,
-      message: current.message || DEFAULT_MESSAGES[type.id],
-      title: current.title || type.title,
+      title: defaults.title,
+      message: defaults.message,
+      themeColor: defaults.themeColor,
+      storyAnswers: {},
+      storyData: null,
     }));
+    setYoutubeQuery(defaults.suggestedMusicQuery || "");
     setStep(2);
+  }
+
+  function updateStoryAnswer(questionId, value) {
+    setForm((current) => {
+      const storyAnswers = {
+        ...(current.storyAnswers || {}),
+        [questionId]: value,
+      };
+      const defaults = getStoryDefaults(current.type, {
+        ...current,
+        storyAnswers,
+      });
+      return {
+        ...current,
+        storyAnswers,
+        title: defaults.title,
+        message: defaults.message,
+        themeColor: defaults.themeColor,
+        storyData: null,
+      };
+    });
+  }
+
+  function currentStory() {
+    return buildPetStory({
+      ...form,
+      storyAnswers: form.storyAnswers || {},
+    });
   }
 
   async function handlePhotos(files) {
@@ -573,7 +619,7 @@ function NewExperienceWizard({ clinic, packageInfo, onSaved }) {
       const response = await fetch("/api/pets/experiences", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, action }),
+        body: JSON.stringify({ ...form, storyData: currentStory(), action }),
       });
       const result = await response.json().catch(() => ({}));
 
@@ -625,8 +671,51 @@ function NewExperienceWizard({ clinic, packageInfo, onSaved }) {
             <label>Espécie<select value={form.species} onChange={(e) => update("species", e.target.value)}><option>Canino</option><option>Felino</option><option>Ave</option><option>Outro</option></select></label>
             <label>Raça (opcional)<input value={form.breed} onChange={(e) => update("breed", e.target.value)} /></label>
             <label>WhatsApp do tutor (opcional)<input inputMode="tel" value={form.tutorPhone} onChange={(e) => update("tutorPhone", e.target.value)} /></label>
-            <label>Data especial (opcional)<input type="date" value={form.specialDate} onChange={(e) => update("specialDate", e.target.value)} /></label>
+            <label>
+              {specialDateLabel(form.type)}
+              <input type="date" value={form.specialDate} onChange={(e) => update("specialDate", e.target.value)} />
+              <small className="field-help">{specialDateHelp(form.type)}</small>
+            </label>
           </div>
+
+          {!!getStoryQuestions(form.type).length && (
+            <div className="story-questions">
+              <div className="story-questions-head">
+                <span className="eyebrow">Roteiro inteligente</span>
+                <h3>Conte um pouco sobre este momento</h3>
+                <p>As respostas mudam a abertura, os capítulos e a carta sugerida.</p>
+              </div>
+
+              {getStoryQuestions(form.type).map((question) => (
+                <div className="story-question" key={question.id}>
+                  <strong>{question.label}</strong>
+
+                  {question.type === "choice" && (
+                    <div className="story-options">
+                      {question.options.map(([value, label]) => (
+                        <button
+                          type="button"
+                          key={value}
+                          className={(form.storyAnswers?.[question.id] || "") === value ? "selected" : ""}
+                          onClick={() => updateStoryAnswer(question.id, value)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {question.type === "text" && (
+                    <input
+                      value={form.storyAnswers?.[question.id] || ""}
+                      placeholder={question.placeholder || ""}
+                      onChange={(event) => updateStoryAnswer(question.id, event.target.value)}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -638,7 +727,7 @@ function NewExperienceWizard({ clinic, packageInfo, onSaved }) {
           </div>
           <div className="form-grid">
             <div className="youtube-search-field">
-              <label>Música no YouTube</label>
+              <label>Música no YouTube</label><small className="music-suggestion">Sugestão para este momento: {currentStory().suggestedMusicQuery}</small>
               <div className="youtube-search-row">
                 <input value={youtubeQuery} onChange={(e) => setYoutubeQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), searchYoutube())} placeholder="Ex.: piano emocionante, música do artista..." />
                 <button type="button" className="secondary-action" onClick={searchYoutube} disabled={youtubeLoading}>{youtubeLoading ? "Buscando..." : "Buscar"}</button>
@@ -699,6 +788,7 @@ function NewExperienceWizard({ clinic, packageInfo, onSaved }) {
               <div><dt>Tutor</dt><dd>{form.tutorName}</dd></div>
               <div><dt>Fotos</dt><dd>{form.photos.length}</dd></div>
               <div><dt>Música</dt><dd>{form.musicUrl ? "Selecionada" : "Sem música"}</dd></div>
+              <div><dt>Roteiro</dt><dd>{Object.keys(form.storyAnswers || {}).length} resposta(s)</dd></div>
             </dl>
             <p>Abra a prévia completa. A publicação usará exatamente o mesmo visual, música e animações.</p>
           </article>
@@ -711,9 +801,10 @@ function NewExperienceWizard({ clinic, packageInfo, onSaved }) {
             onClose={() => setPreviewOpen(false)}
             experience={{
               ...form,
+              storyData: currentStory(),
               clinic: {
                 tradeName: clinic?.tradeName,
-                logoUrl: clinic?.logoUrl || "/eterniza/assets/pets/brands/logo-onda-transparente.png",
+                logoUrl: clinic?.logoUrl || "/eterniza/assets/pets/brands/logo-onda-card.png",
                 primaryColor: clinic?.primaryColor,
                 signature: clinic?.signature,
                 showEternizaBrand: clinic?.showEternizaBrand,
@@ -774,6 +865,8 @@ async function compressImage(file) {
 }
 
 function ExperiencesList({ items, loading, onReload, setNotice }) {
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   async function copyPublicLink(item) {
     const url = `${window.location.origin}${item.publicUrl}`;
     try {
@@ -819,14 +912,36 @@ function ExperiencesList({ items, loading, onReload, setNotice }) {
     });
   }
 
-  async function remove(id) {
-    const response = await fetch(`/api/pets/experiences/${id}`, { method: "DELETE" });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || !result.ok) {
-      setNotice({ title: "Não foi possível excluir", text: result.message || "Tente novamente." });
-      return;
+  async function remove() {
+    if (!deleteTarget?.id) return;
+
+    setDeleting(true);
+
+    try {
+      const response = await fetch(`/api/pets/experiences/${deleteTarget.id}`, {
+        method: "DELETE",
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.message || "Não foi possível remover.");
+      }
+
+      setDeleteTarget(null);
+      await onReload();
+
+      setNotice({
+        title: "Experiência removida",
+        text: "Ela saiu da lista, mas o uso do pacote continua contabilizado.",
+      });
+    } catch (error) {
+      setNotice({
+        title: "Não foi possível remover",
+        text: error.message || "Tente novamente.",
+      });
+    } finally {
+      setDeleting(false);
     }
-    await onReload();
   }
 
   return (
@@ -855,14 +970,37 @@ function ExperiencesList({ items, loading, onReload, setNotice }) {
                 {item.status === "PUBLISHED" && <button onClick={() => sharePublicLink(item)}>Compartilhar</button>}
                 {item.status === "PUBLISHED" && <button onClick={() => copyPublicLink(item)}>Copiar link</button>}
                 {item.status === "DRAFT" && <button onClick={() => action(item.id, "PUBLISH")}>Publicar</button>}
-                {item.status === "DRAFT" && <button className="danger-mini" onClick={() => remove(item.id)}>Excluir</button>}
                 {item.status === "PUBLISHED" && <button className="danger-mini" onClick={() => action(item.id, "ARCHIVE")}>Arquivar</button>}
+                {["DRAFT", "ARCHIVED"].includes(item.status) && (
+                  <button className="danger-mini" onClick={() => setDeleteTarget(item)}>Remover</button>
+                )}
               </div>
             </article>;
           })}
         </div>
       ) : (
         <div className="experience-empty"><span>🐾</span><h3>Nenhuma experiência criada.</h3><p>Use o botão “Nova experiência” para começar.</p></div>
+      )}
+
+      {deleteTarget && (
+        <div className="delete-confirm-overlay">
+          <div className="delete-confirm-card">
+            <span>🗑️</span>
+            <h3>Remover esta experiência?</h3>
+            <p>
+              <b>{deleteTarget.petName}</b> será removido da lista da clínica.
+              Caso já tenha sido publicado, o uso continuará contabilizado no pacote mensal.
+            </p>
+            <div>
+              <button className="secondary-action" disabled={deleting} onClick={() => setDeleteTarget(null)}>
+                Cancelar
+              </button>
+              <button className="delete-confirm-button" disabled={deleting} onClick={remove}>
+                {deleting ? "Removendo..." : "Remover experiência"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );
@@ -1005,7 +1143,7 @@ function Style() {
       .coming-soon p{color:#91a5b2;line-height:1.5}
       .menu-overlay{display:none}
 
-      .wizard-shell,.experiences-shell{max-width:1440px;margin:25px auto 0}.wizard-head{display:grid;grid-template-columns:1fr 250px;align-items:end;gap:20px;margin-bottom:18px}.wizard-head h2,.section-heading-pet h2{font:700 38px Georgia,serif;margin:5px 0}.wizard-head p,.section-heading-pet p{color:#8fa4b1;margin:0}.wizard-progress{height:10px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden}.wizard-progress i{display:block;height:100%;background:linear-gradient(90deg,var(--pet-accent),#8bd0ff)}.type-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.type-card{min-height:180px;text-align:left;padding:23px;border-radius:20px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.035);color:#fff}.type-card:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--pet-accent) 45%,transparent);background:color-mix(in srgb,var(--pet-accent) 9%,#08131c)}.type-card span{display:block;font-size:34px}.type-card strong{display:block;font:700 22px Georgia,serif;margin:13px 0 7px}.type-card small{color:#8fa3b0;line-height:1.4}.wizard-card{padding:25px;border-radius:22px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.032)}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.form-grid.one{grid-template-columns:1fr}.form-grid label{display:grid;gap:7px;color:#dce7ed;font-size:13px;font-weight:900}.form-grid input,.form-grid select,.form-grid textarea{width:100%;border:1px solid rgba(255,255,255,.12);background:#07131d;color:#fff;border-radius:13px;padding:13px 14px;outline:none}.form-grid input:focus,.form-grid select:focus,.form-grid textarea:focus{border-color:var(--pet-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--pet-accent) 14%,transparent)}.form-grid input[type=color]{height:49px;padding:5px}.youtube-search-field{grid-column:1/-1;display:grid;gap:9px}.youtube-search-field label{color:#dce7ed;font-size:13px;font-weight:900}.youtube-search-row{display:grid;grid-template-columns:1fr auto;gap:9px}.youtube-search-row input{width:100%;border:1px solid rgba(255,255,255,.12);background:#07131d;color:#fff;border-radius:13px;padding:13px 14px}.youtube-message{color:#92a8b5}.youtube-results{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;max-height:340px;overflow:auto}.youtube-result{display:grid;grid-template-columns:92px 1fr auto;align-items:center;gap:10px;text-align:left;padding:9px;border:1px solid rgba(255,255,255,.09);border-radius:14px;background:rgba(255,255,255,.03);color:#fff}.youtube-result.selected{border-color:var(--pet-accent);background:color-mix(in srgb,var(--pet-accent) 12%,#07131d)}.youtube-result img{width:92px;height:58px;object-fit:cover;border-radius:9px}.youtube-result span strong,.youtube-result span small{display:block}.youtube-result span small{color:#8399a7;margin-top:4px}.youtube-result b{font-size:11px;color:#8fd0ff}.selected-music{display:flex;justify-content:space-between;align-items:center;padding:11px 13px;border-radius:12px;background:rgba(95,205,255,.09);color:#9bd8ff}.selected-music button{border:0;background:transparent;color:#ff9fa9}.photo-picker{display:grid;place-items:center;text-align:center;min-height:115px;margin-top:18px;border:1px dashed rgba(255,255,255,.2);border-radius:17px;background:rgba(255,255,255,.025)}.photo-picker input{display:none}.photo-picker span{font-weight:1000}.photo-picker small{color:#8498a5;margin-top:6px}.wizard-photos{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:14px}.wizard-photos div{position:relative;height:130px}.wizard-photos img{width:100%;height:100%;object-fit:cover;border-radius:14px}.wizard-photos button{position:absolute;right:6px;top:6px;width:28px;height:28px;border:0;border-radius:50%;background:rgba(0,0,0,.62);color:#fff}.wizard-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.wizard-error{margin-top:15px;padding:13px;border-radius:12px;background:rgba(255,65,85,.11);border:1px solid rgba(255,65,85,.24);color:#ffb5be}.review-grid{display:grid;grid-template-columns:1fr 380px;gap:18px}.review-preview,.review-summary{padding:27px;border-radius:22px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.035)}.review-preview{text-align:center;background:radial-gradient(circle at 50% 0%,color-mix(in srgb,var(--preview-accent) 25%,transparent),transparent 38%),rgba(255,255,255,.03)}.review-preview span{font-size:43px}.review-preview small,.review-preview h3,.review-preview b,.review-preview em{display:block}.review-preview h3{font:700 48px Georgia,serif;margin:10px}.review-preview b{color:#9ed6ff}.review-preview img{width:100%;max-height:340px;object-fit:cover;border-radius:19px;margin:20px 0}.review-preview p{white-space:pre-wrap;color:#cad7df;line-height:1.65}.review-preview em{font-style:normal;color:#8ea5b3;margin-top:18px}.preview-button{width:100%;margin-top:20px}.review-summary h3{font:700 30px Georgia,serif;margin:8px 0}.review-summary dl{display:grid;gap:8px}.review-summary dl div{display:flex;justify-content:space-between;gap:15px;padding:12px;border-radius:11px;background:rgba(255,255,255,.035)}.review-summary dt{color:#8297a5}.review-summary dd{margin:0;font-weight:900}.review-summary p{color:#8da2af;line-height:1.5}.section-heading-pet{display:flex;justify-content:space-between;align-items:center;gap:16px}.experience-list{display:grid;gap:11px;margin-top:18px}.experience-card{display:grid;grid-template-columns:90px 1fr auto;align-items:center;gap:16px;padding:14px;border-radius:18px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.032)}.experience-cover{width:90px;height:82px;display:grid;place-items:center;border-radius:14px;background:color-mix(in srgb,var(--pet-accent) 13%,#08131c);font-size:31px;overflow:hidden}.experience-cover img{width:100%;height:100%;object-fit:cover}.experience-info small{color:#7fc7ff;font-weight:900}.experience-info h3{font:700 23px Georgia,serif;margin:4px 0}.experience-info p{color:#8da2af;margin:0}.experience-status{display:inline-flex;margin-top:7px;padding:5px 8px;border-radius:999px;font-size:9px;font-style:normal;font-weight:1000}.experience-status.published{background:rgba(70,220,145,.12);color:#8ff0bd}.experience-status.draft{background:rgba(255,190,70,.12);color:#ffd185}.experience-status.archived{background:rgba(255,255,255,.08);color:#9aabb6}.experience-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}.experience-actions a,.experience-actions button{min-height:39px;padding:0 13px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff;text-decoration:none;font-weight:900}.experience-actions .danger-mini{color:#ff9ca8}.experience-empty{text-align:center;padding:55px;border-radius:22px;border:1px dashed rgba(255,255,255,.14);margin-top:18px;color:#8ea3b0}.experience-empty span{font-size:40px}.experience-empty h3{font:700 28px Georgia,serif;color:#fff;margin:10px}.notice-overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.65);z-index:100;padding:20px}.notice-card{width:min(430px,100%);text-align:center;padding:30px;border-radius:23px;background:#0b151e;border:1px solid rgba(255,255,255,.12)}.notice-card span{width:58px;height:58px;display:grid;place-items:center;margin:auto;border-radius:17px;background:rgba(75,220,145,.15);color:#8ff0bd;font-size:28px}.notice-card h2{font:700 30px Georgia,serif}.notice-card p{color:#93a8b5;line-height:1.5}.notice-card a,.notice-card button{display:flex;align-items:center;justify-content:center;width:100%;min-height:48px;border-radius:12px;margin-top:9px;text-decoration:none;font-weight:1000}.notice-card a{background:var(--pet-accent);color:#03101a}.notice-card button{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff}
+      .wizard-shell,.experiences-shell{max-width:1440px;margin:25px auto 0}.wizard-head{display:grid;grid-template-columns:1fr 250px;align-items:end;gap:20px;margin-bottom:18px}.wizard-head h2,.section-heading-pet h2{font:700 38px Georgia,serif;margin:5px 0}.wizard-head p,.section-heading-pet p{color:#8fa4b1;margin:0}.wizard-progress{height:10px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden}.wizard-progress i{display:block;height:100%;background:linear-gradient(90deg,var(--pet-accent),#8bd0ff)}.type-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.type-card{min-height:180px;text-align:left;padding:23px;border-radius:20px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.035);color:#fff}.type-card:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--pet-accent) 45%,transparent);background:color-mix(in srgb,var(--pet-accent) 9%,#08131c)}.type-card span{display:block;font-size:34px}.type-card strong{display:block;font:700 22px Georgia,serif;margin:13px 0 7px}.type-card small{color:#8fa3b0;line-height:1.4}.wizard-card{padding:25px;border-radius:22px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.032)}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.form-grid.one{grid-template-columns:1fr}.story-questions{margin-top:22px;padding-top:22px;border-top:1px solid rgba(255,255,255,.08)}.story-questions-head h3{font:700 27px Georgia,serif;margin:6px 0}.story-questions-head p{color:#8fa3b0;margin:0 0 18px}.story-question{display:grid;gap:10px;margin-top:17px}.story-question strong{font-size:14px}.story-options{display:flex;gap:9px;flex-wrap:wrap}.story-options button{min-height:43px;padding:0 14px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.035);color:#d8e5ec;font-weight:850}.story-options button.selected{border-color:var(--pet-accent);background:color-mix(in srgb,var(--pet-accent) 16%,#07131d);color:#fff}.story-question input{width:100%;border:1px solid rgba(255,255,255,.12);background:#07131d;color:#fff;border-radius:13px;padding:13px 14px}.music-suggestion{display:block;color:#82a8bf;font-size:11px;font-weight:500;margin-top:4px}.form-grid label{display:grid;gap:7px;color:#dce7ed;font-size:13px;font-weight:900}.field-help{color:#7f95a3;font-size:11px;font-weight:500;line-height:1.4}.form-grid input,.form-grid select,.form-grid textarea{width:100%;border:1px solid rgba(255,255,255,.12);background:#07131d;color:#fff;border-radius:13px;padding:13px 14px;outline:none}.form-grid input:focus,.form-grid select:focus,.form-grid textarea:focus{border-color:var(--pet-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--pet-accent) 14%,transparent)}.form-grid input[type=color]{height:49px;padding:5px}.youtube-search-field{grid-column:1/-1;display:grid;gap:9px}.youtube-search-field label{color:#dce7ed;font-size:13px;font-weight:900}.youtube-search-row{display:grid;grid-template-columns:1fr auto;gap:9px}.youtube-search-row input{width:100%;border:1px solid rgba(255,255,255,.12);background:#07131d;color:#fff;border-radius:13px;padding:13px 14px}.youtube-message{color:#92a8b5}.youtube-results{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;max-height:340px;overflow:auto}.youtube-result{display:grid;grid-template-columns:92px 1fr auto;align-items:center;gap:10px;text-align:left;padding:9px;border:1px solid rgba(255,255,255,.09);border-radius:14px;background:rgba(255,255,255,.03);color:#fff}.youtube-result.selected{border-color:var(--pet-accent);background:color-mix(in srgb,var(--pet-accent) 12%,#07131d)}.youtube-result img{width:92px;height:58px;object-fit:cover;border-radius:9px}.youtube-result span strong,.youtube-result span small{display:block}.youtube-result span small{color:#8399a7;margin-top:4px}.youtube-result b{font-size:11px;color:#8fd0ff}.selected-music{display:flex;justify-content:space-between;align-items:center;padding:11px 13px;border-radius:12px;background:rgba(95,205,255,.09);color:#9bd8ff}.selected-music button{border:0;background:transparent;color:#ff9fa9}.photo-picker{display:grid;place-items:center;text-align:center;min-height:115px;margin-top:18px;border:1px dashed rgba(255,255,255,.2);border-radius:17px;background:rgba(255,255,255,.025)}.photo-picker input{display:none}.photo-picker span{font-weight:1000}.photo-picker small{color:#8498a5;margin-top:6px}.wizard-photos{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:14px}.wizard-photos div{position:relative;height:130px}.wizard-photos img{width:100%;height:100%;object-fit:cover;border-radius:14px}.wizard-photos button{position:absolute;right:6px;top:6px;width:28px;height:28px;border:0;border-radius:50%;background:rgba(0,0,0,.62);color:#fff}.wizard-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.wizard-error{margin-top:15px;padding:13px;border-radius:12px;background:rgba(255,65,85,.11);border:1px solid rgba(255,65,85,.24);color:#ffb5be}.review-grid{display:grid;grid-template-columns:1fr 380px;gap:18px}.review-preview,.review-summary{padding:27px;border-radius:22px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.035)}.review-preview{text-align:center;background:radial-gradient(circle at 50% 0%,color-mix(in srgb,var(--preview-accent) 25%,transparent),transparent 38%),rgba(255,255,255,.03)}.review-preview span{font-size:43px}.review-preview small,.review-preview h3,.review-preview b,.review-preview em{display:block}.review-preview h3{font:700 48px Georgia,serif;margin:10px}.review-preview b{color:#9ed6ff}.review-preview img{width:100%;max-height:340px;object-fit:cover;border-radius:19px;margin:20px 0}.review-preview p{white-space:pre-wrap;color:#cad7df;line-height:1.65}.review-preview em{font-style:normal;color:#8ea5b3;margin-top:18px}.preview-button{width:100%;margin-top:20px}.review-summary h3{font:700 30px Georgia,serif;margin:8px 0}.review-summary dl{display:grid;gap:8px}.review-summary dl div{display:flex;justify-content:space-between;gap:15px;padding:12px;border-radius:11px;background:rgba(255,255,255,.035)}.review-summary dt{color:#8297a5}.review-summary dd{margin:0;font-weight:900}.review-summary p{color:#8da2af;line-height:1.5}.section-heading-pet{display:flex;justify-content:space-between;align-items:center;gap:16px}.experience-list{display:grid;gap:11px;margin-top:18px}.experience-card{display:grid;grid-template-columns:90px 1fr auto;align-items:center;gap:16px;padding:14px;border-radius:18px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.032)}.experience-cover{width:90px;height:82px;display:grid;place-items:center;border-radius:14px;background:color-mix(in srgb,var(--pet-accent) 13%,#08131c);font-size:31px;overflow:hidden}.experience-cover img{width:100%;height:100%;object-fit:cover}.experience-info small{color:#7fc7ff;font-weight:900}.experience-info h3{font:700 23px Georgia,serif;margin:4px 0}.experience-info p{color:#8da2af;margin:0}.experience-status{display:inline-flex;margin-top:7px;padding:5px 8px;border-radius:999px;font-size:9px;font-style:normal;font-weight:1000}.experience-status.published{background:rgba(70,220,145,.12);color:#8ff0bd}.experience-status.draft{background:rgba(255,190,70,.12);color:#ffd185}.experience-status.archived{background:rgba(255,255,255,.08);color:#9aabb6}.experience-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}.experience-actions a,.experience-actions button{min-height:39px;padding:0 13px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff;text-decoration:none;font-weight:900}.experience-actions .danger-mini{color:#ff9ca8}.experience-empty{text-align:center;padding:55px;border-radius:22px;border:1px dashed rgba(255,255,255,.14);margin-top:18px;color:#8ea3b0}.experience-empty span{font-size:40px}.experience-empty h3{font:700 28px Georgia,serif;color:#fff;margin:10px}.notice-overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.65);z-index:100;padding:20px}.notice-card{width:min(430px,100%);text-align:center;padding:30px;border-radius:23px;background:#0b151e;border:1px solid rgba(255,255,255,.12)}.notice-card span{width:58px;height:58px;display:grid;place-items:center;margin:auto;border-radius:17px;background:rgba(75,220,145,.15);color:#8ff0bd;font-size:28px}.notice-card h2{font:700 30px Georgia,serif}.notice-card p{color:#93a8b5;line-height:1.5}.notice-card a,.notice-card button{display:flex;align-items:center;justify-content:center;width:100%;min-height:48px;border-radius:12px;margin-top:9px;text-decoration:none;font-weight:1000}.notice-card a{background:var(--pet-accent);color:#03101a}.notice-card button{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff}.delete-confirm-overlay{position:fixed;inset:0;display:grid;place-items:center;padding:20px;background:rgba(0,0,0,.72);z-index:160}.delete-confirm-card{width:min(460px,100%);padding:29px;text-align:center;border-radius:23px;border:1px solid rgba(255,255,255,.12);background:#0b151e;box-shadow:0 35px 100px rgba(0,0,0,.48)}.delete-confirm-card span{font-size:42px}.delete-confirm-card h3{font:700 30px Georgia,serif;margin:12px 0}.delete-confirm-card p{color:#9aafbb;line-height:1.55}.delete-confirm-card p b{color:#fff}.delete-confirm-card div{display:flex;justify-content:center;gap:10px;margin-top:22px}.delete-confirm-button{min-height:46px;padding:0 17px;border:0;border-radius:12px;background:#d94d61;color:#fff;font-weight:1000}.delete-confirm-button:disabled{opacity:.5}
       @media(max-width:1100px){
         .type-grid{grid-template-columns:repeat(2,1fr)}
         .review-grid{grid-template-columns:1fr}

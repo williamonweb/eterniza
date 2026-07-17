@@ -20,7 +20,7 @@ async function context(id) {
   }
 
   const experience = await prisma.petExperience.findFirst({
-    where: { id, clinicId: user.clinic.id },
+    where: { id, clinicId: user.clinic.id, deletedAt: null },
   });
 
   return { user, experience };
@@ -50,8 +50,10 @@ export async function PATCH(request, { params }) {
         const used = await prisma.petExperience.count({
           where: {
             clinicId: ctx.user.clinic.id,
-            status: "PUBLISHED",
-            publishedAt: { gte: monthStart },
+            OR: [
+              { countedAt: { gte: monthStart } },
+              { countedAt: null, publishedAt: { gte: monthStart } },
+            ],
           },
         });
 
@@ -65,7 +67,11 @@ export async function PATCH(request, { params }) {
 
       const updated = await prisma.petExperience.update({
         where: { id: ctx.experience.id },
-        data: { status: "PUBLISHED", publishedAt: new Date() },
+        data: {
+          status: "PUBLISHED",
+          publishedAt: ctx.experience.publishedAt || new Date(),
+          countedAt: ctx.experience.countedAt || ctx.experience.publishedAt || new Date(),
+        },
       });
 
       return NextResponse.json({ ok: true, experience: updated });
@@ -88,20 +94,33 @@ export async function PATCH(request, { params }) {
 export async function DELETE(_request, { params }) {
   try {
     const ctx = await context(String(params?.id || ""));
-    if (!ctx?.experience) {
-      return NextResponse.json({ ok: false, message: "Experiência não encontrada." }, { status: 404 });
-    }
 
-    if (ctx.experience.status === "PUBLISHED") {
+    if (!ctx?.experience) {
       return NextResponse.json(
-        { ok: false, message: "Experiências publicadas devem ser arquivadas, não excluídas." },
-        { status: 409 }
+        { ok: false, message: "Experiência não encontrada." },
+        { status: 404 }
       );
     }
 
-    await prisma.petExperience.delete({ where: { id: ctx.experience.id } });
-    return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ ok: false, message: "Erro ao excluir experiência." }, { status: 500 });
+    await prisma.petExperience.update({
+      where: { id: ctx.experience.id },
+      data: {
+        status: "ARCHIVED",
+        deletedAt: new Date(),
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      usageRefunded: false,
+      message: "Experiência removida da lista. O uso do pacote não foi devolvido.",
+    });
+  } catch (error) {
+    console.error("[pets/experiences DELETE]", error);
+
+    return NextResponse.json(
+      { ok: false, message: "Erro ao remover experiência." },
+      { status: 500 }
+    );
   }
 }

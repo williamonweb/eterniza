@@ -60,29 +60,31 @@ export async function GET() {
       total,
       viewsAggregate,
       recentRows,
+      consumedThisMonth,
     ] = await Promise.all([
       prisma.petExperience.count({
-        where: { clinicId: clinic.id, createdAt: { gte: monthStart } },
+        where: { clinicId: clinic.id, deletedAt: null, createdAt: { gte: monthStart } },
       }),
       prisma.petExperience.count({
         where: {
           clinicId: clinic.id,
+          deletedAt: null,
           status: "PUBLISHED",
           publishedAt: { gte: monthStart },
         },
       }),
       prisma.petExperience.count({
-        where: { clinicId: clinic.id, status: "DRAFT" },
+        where: { clinicId: clinic.id, deletedAt: null, status: "DRAFT" },
       }),
       prisma.petExperience.count({
-        where: { clinicId: clinic.id },
+        where: { clinicId: clinic.id, deletedAt: null },
       }),
       prisma.petExperience.aggregate({
-        where: { clinicId: clinic.id, updatedAt: { gte: monthStart } },
+        where: { clinicId: clinic.id, deletedAt: null, updatedAt: { gte: monthStart } },
         _sum: { views: true },
       }),
       prisma.petExperience.findMany({
-        where: { clinicId: clinic.id },
+        where: { clinicId: clinic.id, deletedAt: null },
         orderBy: { updatedAt: "desc" },
         take: 5,
         select: {
@@ -92,6 +94,15 @@ export async function GET() {
           type: true,
           status: true,
           updatedAt: true,
+        },
+      }),
+      prisma.petExperience.count({
+        where: {
+          clinicId: clinic.id,
+          OR: [
+            { countedAt: { gte: monthStart } },
+            { countedAt: null, publishedAt: { gte: monthStart } },
+          ],
         },
       }),
     ]);
@@ -121,7 +132,7 @@ export async function GET() {
     };
 
     const limit = Number(clinic.monthlyTributeLimit || 0);
-    const used = Number(usage.publishedThisMonth || 0);
+    const used = Number(consumedThisMonth || 0);
     const remaining = limit > 0 ? Math.max(0, limit - used) : null;
     const progress = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
 

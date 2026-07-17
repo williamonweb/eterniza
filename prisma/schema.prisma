@@ -249,12 +249,11 @@ model Clinic {
   @@index([createdAt])
 }
 
-
 model PetExperience {
-  id           String              @id @default(cuid())
-  slug         String              @unique
-  type         PetExperienceType
-  status       PetExperienceStatus @default(DRAFT)
+  id     String              @id @default(cuid())
+  slug   String              @unique
+  type   PetExperienceType
+  status PetExperienceStatus @default(DRAFT)
 
   petName      String
   species      String?
@@ -262,24 +261,30 @@ model PetExperience {
   tutorName    String
   tutorPhone   String?
   title        String
-  message      String              @db.Text
+  message      String    @db.Text
   specialDate  DateTime?
   musicUrl     String?
   photos       Json?
+  storyAnswers Json?
+  storyData    Json?
   themeColor   String?
-  views        Int                 @default(0)
+  views        Int       @default(0)
 
-  clinicId     String
-  clinic       Clinic              @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  clinicId String
+  clinic   Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 
-  createdById  String
-  createdBy    User                @relation("PetExperienceCreator", fields: [createdById], references: [id])
+  createdById String
+  createdBy   User   @relation("PetExperienceCreator", fields: [createdById], references: [id])
 
-  publishedAt  DateTime?
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
+  publishedAt DateTime?
+  countedAt   DateTime?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([clinicId, status])
+  @@index([clinicId, countedAt])
+  @@index([clinicId, deletedAt])
   @@index([clinicId, createdAt])
   @@index([createdById])
 }

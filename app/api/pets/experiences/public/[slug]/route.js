@@ -25,7 +25,7 @@ export async function GET(_request, { params }) {
       },
     });
 
-    if (!experience || experience.status !== "PUBLISHED") {
+    if (!experience || experience.status !== "PUBLISHED" || experience.deletedAt) {
       return NextResponse.json(
         { ok: false, message: "Experiência não encontrada." },
         { status: 404 }
