@@ -607,7 +607,28 @@ $('photos').addEventListener('change',async()=>{
     input.value='';
   }
 });
-function youtubeId(url){if(!url)return'';const ps=[/youtube\.com\/watch\?v=([^&]+)/,/youtube\.com\/watch\?.*?&v=([^&]+)/,/youtu\.be\/([^?&]+)/,/youtube\.com\/shorts\/([^?&]+)/,/youtube\.com\/embed\/([^?&]+)/,/youtube\.com\/live\/([^?&]+)/];for(const p of ps){const m=url.trim().match(p);if(m)return m[1].replace(/[^a-zA-Z0-9_-]/g,'')}return''}
+function youtubeId(value){
+  if(!value) return '';
+  const raw=String(value).trim();
+  if(/^[a-zA-Z0-9_-]{11}$/.test(raw)) return raw;
+  try{
+    const normalized=/^https?:\/\//i.test(raw)?raw:`https://${raw}`;
+    const url=new URL(normalized);
+    const host=url.hostname.replace(/^www\./,'').toLowerCase();
+    let id='';
+    if(host==='youtu.be') id=url.pathname.split('/').filter(Boolean)[0]||'';
+    if(['youtube.com','m.youtube.com','music.youtube.com','youtube-nocookie.com'].includes(host)){
+      id=url.searchParams.get('v')||'';
+      if(!id){
+        const parts=url.pathname.split('/').filter(Boolean);
+        if(['shorts','embed','live'].includes(parts[0])) id=parts[1]||'';
+      }
+    }
+    return /^[a-zA-Z0-9_-]{11}$/.test(id)?id:'';
+  }catch(error){
+    return '';
+  }
+}
 function diff(dateValue){if(!dateValue)return null;const start=new Date(dateValue+'T00:00:00'), now=new Date(), ms=Math.max(0,now-start);return{days:Math.floor(ms/864e5),hours:Math.floor(ms/36e5),minutes:Math.floor(ms/6e4),seconds:Math.floor(ms/1e3)%60}}
 function yearsMonthsDays(dateValue){
   if(!dateValue) return {years:0,months:0,days:0};
@@ -726,7 +747,11 @@ function renderPreview(){
         ${p.id==='premium'&&dateLabel?`<p class="story-date"><b>Data especial:</b> ${dateLabel}</p>`:''}
         <article class="story-letter" id="cineLetter"><h3>Uma carta para você</h3><p id="typedLetter"></p></article>
         <div class="story-final" id="cineFinal"><span>${r.emoji}</span><strong>Essa lembrança fica guardada aqui.</strong><em>Com carinho, ${esc(state.senderName)}</em></div>
-        ${state.youtubeId?`<div class="music-frame-wrap" id="ytHolder"></div>`:''}
+        ${state.youtubeId?`<section class="story-youtube-player" aria-label="Música da homenagem">
+          <div class="story-youtube-copy"><strong>🎵 Música da homenagem</strong><span>Toque no player para ouvir. Alguns celulares exigem esse toque por segurança.</span></div>
+          <div class="music-frame-wrap" id="ytHolder"></div>
+          <a class="ghost-btn small youtube-open-link" href="https://www.youtube.com/watch?v=${encodeURIComponent(state.youtubeId)}" target="_blank" rel="noopener noreferrer">Abrir no YouTube</a>
+        </section>`:''}
       </div>
     </section>`;
   $('orderSummary').innerHTML=`<div class="order-line"><span>Cliente</span><strong>${esc(state.userEmail||'-')}</strong></div><div class="order-line"><span>Para</span><strong>${esc(r.title)}</strong></div><div class="order-line"><span>Tema</span><strong>${esc(r.theme)}</strong></div><div class="order-line"><span>Plano</span><strong>${esc(p.name)}</strong></div><div class="order-line"><span>Valor</span><strong>${esc(p.price)}</strong></div><div class="order-line"><span>Fotos</span><strong>${photoList.length}/${planPhotoLimit(p)}</strong></div><div class="order-line"><span>Validade</span><strong>${esc(p.duration)}</strong></div>`;
@@ -1004,25 +1029,34 @@ function startAppMusic(){
   });
   return true;
 }
-function youtubeEmbedSrc(){
+function youtubeEmbedSrc({autoplay=false}={}){
   if(!state.youtubeId) return '';
   const params=new URLSearchParams({
-    autoplay:'1', mute:'0', controls:'0', rel:'0', modestbranding:'1', playsinline:'1', enablejsapi:'1', fs:'0', iv_load_policy:'3'
+    autoplay:autoplay?'1':'0', mute:'0', controls:'1', rel:'0', modestbranding:'1', playsinline:'1', enablejsapi:'1', fs:'1', iv_load_policy:'3'
   });
   if(location.protocol.startsWith('http')) params.set('origin',location.origin);
   return `https://www.youtube.com/embed/${state.youtubeId}?${params.toString()}`;
 }
-function createYoutubeFrame(){
+function createYoutubeFrame({autoplay=false}={}){
   const holder=$('ytHolder');
   if(!holder||!state.youtubeId) return null;
   let frame=$('ytFrame');
-  if(frame) return frame;
+  if(frame){
+    if(autoplay && !frame.dataset.autoplayRequested){
+      frame.dataset.autoplayRequested='1';
+      frame.src=youtubeEmbedSrc({autoplay:true});
+    }
+    return frame;
+  }
   frame=document.createElement('iframe');
   frame.id='ytFrame';
-  frame.title='Música do YouTube';
-  frame.src=youtubeEmbedSrc();
-  frame.setAttribute('allow','autoplay; encrypted-media; picture-in-picture');
+  frame.title='Música da homenagem no YouTube';
+  frame.src=youtubeEmbedSrc({autoplay});
+  frame.loading='eager';
+  frame.dataset.autoplayRequested=autoplay?'1':'';
+  frame.setAttribute('allow','autoplay; encrypted-media; picture-in-picture; fullscreen');
   frame.setAttribute('allowfullscreen','');
+  frame.setAttribute('referrerpolicy','strict-origin-when-cross-origin');
   holder.innerHTML='';
   holder.appendChild(frame);
   return frame;
@@ -1036,21 +1070,23 @@ function startMusic(showMsg=true){
   if(mode !== 'youtube'){
     const ok=startAppMusic();
     if(b){b.textContent= ok ? '♫ Música ligada' : '▶ Tocar música'; b.classList.toggle('playing',!!ok)}
-    if(showMsg&&!ok) showModal('Música de fundo','Este navegador não liberou o áudio interno. Tente clicar novamente em “Tocar música”.');
+    if(showMsg&&!ok) showModal('Música de fundo','O navegador bloqueou o áudio. Toque novamente em “Tocar música”.');
     return;
   }
   if(!state.youtubeId) return;
   stopAppMusic();
-  const frame=createYoutubeFrame();
+  const frame=createYoutubeFrame({autoplay:true});
   if(!frame) return;
-  if(b){b.textContent='♫ Tentando tocar'; b.classList.add('playing')}
+  if(b){b.textContent='♫ Música pronta'; b.classList.add('playing')}
   const tryPlay=()=>{commandYoutube(frame,'unMute');commandYoutube(frame,'setVolume',[100]);commandYoutube(frame,'playVideo')};
   tryPlay();
-  frame.onload=()=>setTimeout(tryPlay,350);
-  setTimeout(tryPlay,800);
-  setTimeout(tryPlay,1800);
-  setTimeout(()=>{ if(b) b.innerHTML='▶ Tocar música novamente'; },4200);
-  if(showMsg) showModal('YouTube','Se não sair som, o vídeo ou o navegador bloqueou a reprodução em segundo plano. Para venda, a opção mais segura é usar as trilhas prontas do app.');
+  setTimeout(tryPlay,250);
+  setTimeout(tryPlay,900);
+  const playerBox=document.querySelector('.story-youtube-player');
+  if(playerBox) playerBox.classList.add('active');
+  if(showMsg){
+    showModal('Música pronta','A música foi carregada. Caso o celular não inicie sozinho, toque no botão ▶ dentro do player exibido na homenagem.');
+  }
 }
 function initMusic(){
   const b=$('playMusic');
