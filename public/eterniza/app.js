@@ -891,18 +891,24 @@ function initStorytelling(){
     start.setAttribute('aria-busy','true');
 
     const prologue=$('storyPrologue');
-    const scrollToPrologue=()=>{
+    const scrollToPrologue=(behavior='smooth')=>{
+      const target=prologue || content;
+      if(!target) return;
+
       try{
-        if(prologue){
-          prologue.scrollIntoView({behavior:'smooth',block:'start'});
-        }else if(content){
-          content.scrollIntoView({behavior:'smooth',block:'start'});
-        }
+        const top=Math.max(0,target.getBoundingClientRect().top + window.scrollY - 12);
+        window.scrollTo({top,behavior});
       }catch(error){
-        if(prologue){
-          window.scrollTo(0,prologue.getBoundingClientRect().top + window.scrollY);
-        }
+        target.scrollIntoView({behavior,block:'start'});
       }
+    };
+
+    // A capa perde altura durante a animação. Por isso a rolagem precisa
+    // acontecer somente depois que o conteúdo estiver visível e a capa sair.
+    const keepPrologueInView=()=>{
+      scrollToPrologue('smooth');
+      setTimeout(()=>scrollToPrologue('smooth'),260);
+      setTimeout(()=>scrollToPrologue('auto'),720);
     };
 
     startMusic(false);
@@ -911,14 +917,13 @@ function initStorytelling(){
     setTimeout(()=>{
       content.classList.add('show');
 
-      requestAnimationFrame(()=>{
-        scrollToPrologue();
-        setTimeout(scrollToPrologue,220);
-      });
-
       setTimeout(()=>{
         open.style.display='none';
         runPrologue();
+
+        requestAnimationFrame(()=>{
+          requestAnimationFrame(keepPrologueInView);
+        });
 
         setTimeout(()=>{
           runCineSlides();
