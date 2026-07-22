@@ -107,11 +107,23 @@ export async function PATCH(request) {
 
     let data;
     if (action === "MARK_PAID") {
+      const allowedMethods = new Set(["PIX", "CARTAO_CREDITO", "CARTAO_DEBITO", "DINHEIRO", "TRANSFERENCIA", "BOLETO", "OUTRO"]);
+      const paymentMethod = String(body.paymentMethod || "").toUpperCase();
+      if (!allowedMethods.has(paymentMethod)) {
+        return NextResponse.json({ ok: false, message: "Selecione uma forma de pagamento válida." }, { status: 400 });
+      }
+
+      const paidAt = body.paidAt ? new Date(`${body.paidAt}T12:00:00`) : new Date();
+      if (Number.isNaN(paidAt.getTime())) {
+        return NextResponse.json({ ok: false, message: "Data de pagamento inválida." }, { status: 400 });
+      }
+
       data = {
         status: "PAID",
-        paidAt: body.paidAt ? new Date(body.paidAt) : new Date(),
-        paymentMethod: String(body.paymentMethod || "PIX"),
+        paidAt,
+        paymentMethod,
         receiptNumber: body.receiptNumber || receiptNumber(),
+        notes: body.notes === undefined ? undefined : (String(body.notes).trim() || null),
       };
     } else if (action === "REOPEN") {
       data = { status: "PENDING", paidAt: null, paymentMethod: null, receiptNumber: null };

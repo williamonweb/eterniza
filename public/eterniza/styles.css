@@ -1094,3 +1094,21 @@ a.demo-open-link{
 @media(max-width:640px){
   .storytelling .story-youtube-player{padding:12px;border-radius:18px}
 }
+
+/* v63.3.1 — YouTube usado somente como áudio, sem player visível */
+.youtube-audio-host{
+  position:fixed!important;
+  width:2px!important;
+  height:2px!important;
+  left:-9999px!important;
+  bottom:0!important;
+  overflow:hidden!important;
+  opacity:.001!important;
+  pointer-events:none!important;
+  z-index:-1!important;
+}
+.youtube-audio-host iframe{
+  width:2px!important;
+  height:2px!important;
+  border:0!important;
+}

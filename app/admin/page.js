@@ -59,6 +59,7 @@ export default function AdminPage() {
   const [savingClinic, setSavingClinic] = useState(false);
   const [petFinance, setPetFinance] = useState({ invoices: [], clinics: [], metrics: {} });
   const [financeEditor, setFinanceEditor] = useState(null);
+  const [paymentEditor, setPaymentEditor] = useState(null);
   const [savingFinance, setSavingFinance] = useState(false);
 
   async function load() {
@@ -487,6 +488,8 @@ export default function AdminPage() {
             setEditor={setFinanceEditor}
             onCreate={savePetInvoice}
             onUpdate={updatePetInvoice}
+            paymentEditor={paymentEditor}
+            setPaymentEditor={setPaymentEditor}
             saving={savingFinance}
           />
         )}
@@ -1076,7 +1079,7 @@ function PetClinicModal({ clinic, setClinic, onClose, onSave, saving }) {
   </div>;
 }
 
-function PetsFinance({ data, editor, setEditor, onCreate, onUpdate, saving }) {
+function PetsFinance({ data, editor, setEditor, onCreate, onUpdate, paymentEditor, setPaymentEditor, saving }) {
   const invoices = data?.invoices || [];
   const clinics = data?.clinics || [];
   const metrics = data?.metrics || {};
@@ -1127,13 +1130,21 @@ function PetsFinance({ data, editor, setEditor, onCreate, onUpdate, saving }) {
             <span>{date(invoice.dueDate)}</span>
             <b>{money(Number(invoice.amountCents || 0) / 100)}</b>
             <em className={`status ${statusClass(invoice.status)}`}>{financeStatus(invoice.status)}</em>
-            <span>{invoice.paidAt ? `${date(invoice.paidAt)} · ${invoice.paymentMethod || "PIX"}` : "—"}</span>
+            <span>{invoice.paidAt ? `${date(invoice.paidAt)} · ${paymentMethodLabel(invoice.paymentMethod)}` : "—"}</span>
             <div className="finance-actions">
               {invoice.status === "PAID" ? <>
                 <a href={`/admin/pets/finance/receipts/${invoice.id}`} target="_blank" rel="noreferrer">Recibo</a>
                 <button disabled={saving} onClick={() => onUpdate({ id: invoice.id, action: "REOPEN" })}>Reabrir</button>
               </> : invoice.status !== "CANCELLED" ? <>
-                <button className="confirm" disabled={saving} onClick={() => onUpdate({ id: invoice.id, action: "MARK_PAID", paymentMethod: "PIX" })}>Marcar pago</button>
+                <button className="confirm" disabled={saving} onClick={() => setPaymentEditor({
+                  id: invoice.id,
+                  clinicName: invoice.clinic?.tradeName || "Clínica",
+                  competency: invoice.competency,
+                  amountCents: Number(invoice.amountCents || 0),
+                  paymentMethod: "PIX",
+                  paidAt: new Date().toISOString().slice(0, 10),
+                  notes: invoice.notes || "",
+                })}>Receber</button>
                 <button disabled={saving} onClick={() => onUpdate({ id: invoice.id, action: "CANCEL" })}>Cancelar</button>
               </> : <span>Cancelada</span>}
             </div>
@@ -1141,6 +1152,25 @@ function PetsFinance({ data, editor, setEditor, onCreate, onUpdate, saving }) {
         ))}
         {!invoices.length && <div className="empty-state">Nenhuma mensalidade registrada. Clique em “Nova mensalidade” para começar.</div>}
       </div>
+
+
+
+      {paymentEditor && <PaymentReceiptModal
+        payment={paymentEditor}
+        setPayment={setPaymentEditor}
+        saving={saving}
+        onClose={() => setPaymentEditor(null)}
+        onConfirm={async () => {
+          await onUpdate({
+            id: paymentEditor.id,
+            action: "MARK_PAID",
+            paymentMethod: paymentEditor.paymentMethod,
+            paidAt: paymentEditor.paidAt,
+            notes: paymentEditor.notes,
+          });
+          setPaymentEditor(null);
+        }}
+      />}
 
       {editor && <div className="modal-overlay">
         <div className="finance-modal">
@@ -1158,6 +1188,65 @@ function PetsFinance({ data, editor, setEditor, onCreate, onUpdate, saving }) {
       </div>}
     </section>
   );
+}
+
+function PaymentReceiptModal({ payment, setPayment, onClose, onConfirm, saving }) {
+  const methods = [
+    ["PIX", "PIX"],
+    ["CARTAO_CREDITO", "Cartão de crédito"],
+    ["CARTAO_DEBITO", "Cartão de débito"],
+    ["DINHEIRO", "Dinheiro"],
+    ["TRANSFERENCIA", "Transferência bancária"],
+    ["BOLETO", "Boleto"],
+    ["OUTRO", "Outro"],
+  ];
+
+  const update = (key, value) => setPayment((current) => ({ ...current, [key]: value }));
+
+  return <div className="modal-overlay">
+    <div className="payment-modal">
+      <div className="panel-heading">
+        <div><span className="eyebrow">Confirmar recebimento</span><h3>Pagamento da mensalidade</h3></div>
+        <button onClick={onClose} aria-label="Fechar">×</button>
+      </div>
+
+      <div className="payment-summary">
+        <div><span>Clínica</span><b>{payment.clinicName}</b></div>
+        <div><span>Competência</span><b>{formatCompetency(payment.competency)}</b></div>
+        <div><span>Valor recebido</span><strong>{money(Number(payment.amountCents || 0) / 100)}</strong></div>
+      </div>
+
+      <fieldset className="payment-methods">
+        <legend>Forma de pagamento</legend>
+        {methods.map(([value, label]) => <label key={value} className={payment.paymentMethod === value ? "selected" : ""}>
+          <input type="radio" name="paymentMethod" value={value} checked={payment.paymentMethod === value} onChange={() => update("paymentMethod", value)} />
+          <span>{label}</span>
+        </label>)}
+      </fieldset>
+
+      <div className="finance-form-grid payment-fields">
+        <label>Data do pagamento<input type="date" value={payment.paidAt || ""} onChange={(e) => update("paidAt", e.target.value)} /></label>
+        <label className="wide">Observações opcionais<textarea value={payment.notes || ""} onChange={(e) => update("notes", e.target.value)} placeholder="Ex.: pagamento identificado no extrato, referência da transação..." /></label>
+      </div>
+
+      <div className="coupon-editor-actions">
+        <button onClick={onClose} disabled={saving}>Cancelar</button>
+        <button className="primary" disabled={saving || !payment.paymentMethod || !payment.paidAt} onClick={onConfirm}>{saving ? "Confirmando..." : "Confirmar pagamento"}</button>
+      </div>
+    </div>
+  </div>;
+}
+
+function paymentMethodLabel(value) {
+  return ({
+    PIX: "PIX",
+    CARTAO_CREDITO: "Cartão de crédito",
+    CARTAO_DEBITO: "Cartão de débito",
+    DINHEIRO: "Dinheiro",
+    TRANSFERENCIA: "Transferência bancária",
+    BOLETO: "Boleto",
+    OUTRO: "Outro",
+  })[String(value || "PIX").toUpperCase()] || value || "PIX";
 }
 
 function financeStatus(status) {
@@ -1540,7 +1629,7 @@ function Style() {
 .settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.settings-card{border:1px solid rgba(239,189,82,.13);background:linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.018));border-radius:22px;padding:21px;box-shadow:0 24px 70px rgba(0,0,0,.22)}.settings-card-head h3{font:700 25px Georgia,serif;margin:0 0 6px}.settings-card-head p{margin:0;color:#918a80}.settings-fields{display:grid;gap:12px;margin-top:18px}.setting-field{display:grid;gap:7px}.setting-field span{color:#d9c79e;font-size:12px;font-weight:900}.setting-field input,.setting-field textarea,.setting-field select{width:100%;border:1px solid rgba(239,189,82,.15);background:#101513;color:#fff;border-radius:12px;padding:12px;font:inherit}.setting-field textarea{min-height:110px;resize:vertical}.setting-field select{appearance:auto}.setting-field input[type="range"]{padding:0;background:transparent}.setting-field input:focus,.setting-field textarea:focus,.setting-field select:focus{outline:none;border-color:#efbd52;box-shadow:0 0 0 3px rgba(239,189,82,.1)}
 .setting-toggle{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;border:1px solid rgba(255,255,255,.06);border-radius:13px;padding:12px}.setting-toggle span{font-weight:900;color:#ddd3c0}.setting-toggle input{display:none}.setting-toggle i{width:42px;height:24px;border-radius:999px;background:#2d322f;position:relative}.setting-toggle i:after{content:"";position:absolute;width:18px;height:18px;border-radius:50%;background:#999;top:3px;left:3px;transition:.2s}.setting-toggle input:checked+i{background:#8d6c29}.setting-toggle input:checked+i:after{left:21px;background:#ffe094}
 .goal-preview{display:grid;gap:12px}.goal-preview div:not(.goal-track){display:flex;justify-content:space-between;gap:12px;color:#aaa194}.goal-preview strong{color:#fff3d5}.goal-track{height:13px;border-radius:999px;background:#1e2522;overflow:hidden}.goal-track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#c99337,#f7dc82)}.goal-preview b{color:#efbd52}.pets-admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}.pet-clinic-card{padding:22px;border-radius:20px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035)}.pet-clinic-head{display:flex;justify-content:space-between;gap:15px}.pet-clinic-head h3{margin:5px 0}.pet-clinic-head small,.pet-clinic-head span{color:#9da7b5}.pet-clinic-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0}.pet-clinic-meta span,.clinic-detail-grid span{color:#8f99a8;font-size:12px}.pet-clinic-meta b,.clinic-detail-grid b{display:block;color:#fff;margin-top:4px}.pet-clinic-actions{display:flex;gap:8px;flex-wrap:wrap}.pet-clinic-actions button{min-height:40px;padding:0 13px;border-radius:10px}.rejection{color:#ffb1ba}.pet-modal{width:min(820px,94vw);max-height:92vh;overflow:auto;background:#0c1118;border:1px solid rgba(255,255,255,.12);border-radius:22px;padding:24px}.clinic-detail-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px;border-radius:14px;background:rgba(255,255,255,.035);margin-bottom:18px}.integration-status{display:grid;gap:12px}.integration-status p{margin:0;color:#aaa194;line-height:1.55}
-.finance-table{padding:8px 20px}.finance-row{display:grid;grid-template-columns:1.25fr .7fr .75fr .7fr .65fr 1fr 1.2fr;gap:12px;align-items:center;padding:14px 4px;border-top:1px solid rgba(255,255,255,.065);min-width:1050px}.finance-row.header{border-top:0;color:#847e75;text-transform:uppercase;font-size:10px;font-weight:1000}.finance-row b,.finance-row small{display:block}.finance-row small{color:#8f887e;margin-top:4px}.finance-actions{display:flex;gap:6px;flex-wrap:wrap}.finance-actions button,.finance-actions a{border:1px solid rgba(239,189,82,.16);background:rgba(255,255,255,.04);color:#fff;border-radius:9px;padding:8px 10px;font-size:11px;font-weight:900;text-decoration:none;cursor:pointer}.finance-actions .confirm{color:#8dffb2;border-color:rgba(69,194,113,.25)}.finance-modal{width:min(760px,94vw);max-height:92vh;overflow:auto;background:#0c1110;border:1px solid rgba(239,189,82,.2);border-radius:22px;padding:24px}.finance-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.finance-form-grid label{display:grid;gap:7px;color:#d8c9a9;font-size:12px;font-weight:900}.finance-form-grid label.wide{grid-column:1/-1}.finance-form-grid input,.finance-form-grid select,.finance-form-grid textarea{width:100%;border:1px solid rgba(239,189,82,.15);background:#101513;color:#fff;border-radius:11px;padding:12px;font:inherit}.finance-form-grid textarea{min-height:90px;resize:vertical}
+.finance-table{padding:8px 20px}.finance-row{display:grid;grid-template-columns:1.25fr .7fr .75fr .7fr .65fr 1fr 1.2fr;gap:12px;align-items:center;padding:14px 4px;border-top:1px solid rgba(255,255,255,.065);min-width:1050px}.finance-row.header{border-top:0;color:#847e75;text-transform:uppercase;font-size:10px;font-weight:1000}.finance-row b,.finance-row small{display:block}.finance-row small{color:#8f887e;margin-top:4px}.finance-actions{display:flex;gap:6px;flex-wrap:wrap}.finance-actions button,.finance-actions a{border:1px solid rgba(239,189,82,.16);background:rgba(255,255,255,.04);color:#fff;border-radius:9px;padding:8px 10px;font-size:11px;font-weight:900;text-decoration:none;cursor:pointer}.finance-actions .confirm{color:#8dffb2;border-color:rgba(69,194,113,.25)}.finance-modal{width:min(760px,94vw);max-height:92vh;overflow:auto;background:#0c1110;border:1px solid rgba(239,189,82,.2);border-radius:22px;padding:24px}.finance-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.finance-form-grid label{display:grid;gap:7px;color:#d8c9a9;font-size:12px;font-weight:900}.finance-form-grid label.wide{grid-column:1/-1}.finance-form-grid input,.finance-form-grid select,.finance-form-grid textarea{width:100%;border:1px solid rgba(239,189,82,.15);background:#101513;color:#fff;border-radius:11px;padding:12px;font:inherit}.finance-form-grid textarea{min-height:90px;resize:vertical}.payment-modal{width:min(680px,94vw);max-height:92vh;overflow:auto;background:#0c1110;border:1px solid rgba(239,189,82,.24);border-radius:22px;padding:24px}.payment-summary{display:grid;grid-template-columns:1.3fr .8fr .8fr;gap:10px;margin:4px 0 20px}.payment-summary div{padding:14px;border-radius:13px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)}.payment-summary span{display:block;color:#8f887e;font-size:10px;text-transform:uppercase;font-weight:900;letter-spacing:.06em}.payment-summary b,.payment-summary strong{display:block;margin-top:7px;color:#fff}.payment-summary strong{color:#8dffb2;font-size:18px}.payment-methods{border:0;padding:0;margin:0 0 18px}.payment-methods legend{color:#d8c9a9;font-size:12px;font-weight:900;margin-bottom:10px}.payment-methods{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.payment-methods legend{grid-column:1/-1}.payment-methods label{display:flex;align-items:center;gap:10px;padding:12px 13px;border-radius:11px;border:1px solid rgba(239,189,82,.13);background:rgba(255,255,255,.03);cursor:pointer;color:#c8c1b5;font-weight:800}.payment-methods label.selected{border-color:rgba(69,194,113,.5);background:rgba(69,194,113,.09);color:#dfffe9}.payment-methods input{accent-color:#45c271}.payment-fields{margin-top:4px}@media(max-width:650px){.payment-summary{grid-template-columns:1fr}.payment-methods{grid-template-columns:1fr}}
 @media(max-width:1180px){.admin-page{grid-template-columns:220px 1fr}.metric-grid,.plans-grid{grid-template-columns:1fr 1fr}.business-grid{grid-template-columns:1fr}}
 @media(max-width:980px){.coupon-admin-grid{grid-template-columns:1fr 1fr}.coupon-form-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.finance-form-grid{grid-template-columns:1fr}.finance-form-grid label.wide{grid-column:auto}.settings-grid,.coupon-admin-grid,.coupon-form-grid{grid-template-columns:1fr}.admin-page{display:block}.sidebar{height:auto;position:static}.sidebar nav{grid-template-columns:1fr 1fr}.sidebar-footer{display:none}.workspace{padding:20px 14px}.topbar,.welcome,.section-heading{align-items:flex-start;flex-direction:column}.metric-grid,.plans-grid{grid-template-columns:1fr}.first-sale{min-width:0;width:100%}.field-grid{grid-template-columns:1fr}}

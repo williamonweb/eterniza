@@ -17,6 +17,18 @@ function competency(value) {
   return month && year ? `${names[Number(month) - 1]}/${year}` : value;
 }
 
+function paymentMethod(value) {
+  return ({
+    PIX: "PIX",
+    CARTAO_CREDITO: "Cartão de crédito",
+    CARTAO_DEBITO: "Cartão de débito",
+    DINHEIRO: "Dinheiro",
+    TRANSFERENCIA: "Transferência bancária",
+    BOLETO: "Boleto",
+    OUTRO: "Outro",
+  })[String(value || "PIX").toUpperCase()] || value || "PIX";
+}
+
 export default async function ReceiptPage({ params }) {
   const user = await getCurrentUser();
   if (!user || String(user.role).toUpperCase() !== "ADMIN") redirect("/login");
@@ -46,7 +58,7 @@ export default async function ReceiptPage({ params }) {
           <div className="box"><span>CNPJ</span><b>{invoice.clinic.cnpj}</b></div>
           <div className="box"><span>Competência</span><b>{competency(invoice.competency)}</b></div>
           <div className="box"><span>Plano / serviço</span><b>{invoice.description}</b></div>
-          <div className="box"><span>Forma de pagamento</span><b>{invoice.paymentMethod || "PIX"}</b></div>
+          <div className="box"><span>Forma de pagamento</span><b>{paymentMethod(invoice.paymentMethod)}</b></div>
           <div className="box"><span>Vencimento</span><b>{date(invoice.dueDate)}</b></div>
           <div className="box"><span>Pagamento</span><b>{date(invoice.paidAt)}</b></div>
         </div>
