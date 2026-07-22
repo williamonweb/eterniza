@@ -1094,3 +1094,24 @@ a.demo-open-link{
 @media(max-width:640px){
   .storytelling .story-youtube-player{padding:12px;border-radius:18px}
 }
+
+
+/* v63.2.2 — áudio do YouTube invisível e foco automático no contador */
+.youtube-audio-host{
+  position:fixed!important;
+  width:1px!important;
+  height:1px!important;
+  left:-9999px!important;
+  bottom:-9999px!important;
+  overflow:hidden!important;
+  opacity:0!important;
+  pointer-events:none!important;
+}
+.youtube-audio-host iframe{
+  width:1px!important;
+  height:1px!important;
+  border:0!important;
+  opacity:0!important;
+  pointer-events:none!important;
+}
+#storyStage,#storyPrologue{scroll-margin-top:12px;}

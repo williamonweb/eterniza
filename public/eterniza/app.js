@@ -747,11 +747,7 @@ function renderPreview(){
         ${p.id==='premium'&&dateLabel?`<p class="story-date"><b>Data especial:</b> ${dateLabel}</p>`:''}
         <article class="story-letter" id="cineLetter"><h3>Uma carta para você</h3><p id="typedLetter"></p></article>
         <div class="story-final" id="cineFinal"><span>${r.emoji}</span><strong>Essa lembrança fica guardada aqui.</strong><em>Com carinho, ${esc(state.senderName)}</em></div>
-        ${state.youtubeId?`<section class="story-youtube-player" aria-label="Música da homenagem">
-          <div class="story-youtube-copy"><strong>🎵 Música da homenagem</strong><span>Toque no player para ouvir. Alguns celulares exigem esse toque por segurança.</span></div>
-          <div class="music-frame-wrap" id="ytHolder"></div>
-          <a class="ghost-btn small youtube-open-link" href="https://www.youtube.com/watch?v=${encodeURIComponent(state.youtubeId)}" target="_blank" rel="noopener noreferrer">Abrir no YouTube</a>
-        </section>`:''}
+        ${state.youtubeId?`<div class="youtube-audio-host" id="ytHolder" aria-hidden="true"></div>`:''}
       </div>
     </section>`;
   $('orderSummary').innerHTML=`<div class="order-line"><span>Cliente</span><strong>${esc(state.userEmail||'-')}</strong></div><div class="order-line"><span>Para</span><strong>${esc(r.title)}</strong></div><div class="order-line"><span>Tema</span><strong>${esc(r.theme)}</strong></div><div class="order-line"><span>Plano</span><strong>${esc(p.name)}</strong></div><div class="order-line"><span>Valor</span><strong>${esc(p.price)}</strong></div><div class="order-line"><span>Fotos</span><strong>${photoList.length}/${planPhotoLimit(p)}</strong></div><div class="order-line"><span>Validade</span><strong>${esc(p.duration)}</strong></div>`;
@@ -891,24 +887,30 @@ function initStorytelling(){
     start.setAttribute('aria-busy','true');
 
     const prologue=$('storyPrologue');
-    const scrollToPrologue=(behavior='smooth')=>{
-      const target=prologue || content;
+    const stage=$('storyStage');
+    const scrollToPrologue=({smooth=true}={})=>{
+      const target=stage||content||prologue;
       if(!target) return;
 
-      try{
-        const top=Math.max(0,target.getBoundingClientRect().top + window.scrollY - 12);
-        window.scrollTo({top,behavior});
-      }catch(error){
-        target.scrollIntoView({behavior,block:'start'});
-      }
-    };
+      const rect=target.getBoundingClientRect();
+      const viewportHeight=window.innerHeight||document.documentElement.clientHeight||0;
+      const targetHeight=Math.min(rect.height||0,760);
+      const centeredOffset=Math.max(12,(viewportHeight-targetHeight)/2);
+      const top=Math.max(0,window.scrollY+rect.top-centeredOffset);
 
-    // A capa perde altura durante a animação. Por isso a rolagem precisa
-    // acontecer somente depois que o conteúdo estiver visível e a capa sair.
-    const keepPrologueInView=()=>{
-      scrollToPrologue('smooth');
-      setTimeout(()=>scrollToPrologue('smooth'),260);
-      setTimeout(()=>scrollToPrologue('auto'),720);
+      try{
+        window.scrollTo({top,behavior:smooth?'smooth':'auto'});
+      }catch(error){
+        window.scrollTo(0,top);
+      }
+
+      // Quando a homenagem estiver dentro de um iframe, solicita também
+      // que a página externa posicione a prévia na área visível.
+      try{
+        if(window.parent&&window.parent!==window){
+          window.parent.postMessage({type:'eterniza:focus-story'},'*');
+        }
+      }catch(error){}
     };
 
     startMusic(false);
@@ -917,13 +919,16 @@ function initStorytelling(){
     setTimeout(()=>{
       content.classList.add('show');
 
+      requestAnimationFrame(()=>{
+        scrollToPrologue({smooth:true});
+      });
+
       setTimeout(()=>{
         open.style.display='none';
+        scrollToPrologue({smooth:true});
+        setTimeout(()=>scrollToPrologue({smooth:false}),320);
+        setTimeout(()=>scrollToPrologue({smooth:false}),850);
         runPrologue();
-
-        requestAnimationFrame(()=>{
-          requestAnimationFrame(keepPrologueInView);
-        });
 
         setTimeout(()=>{
           runCineSlides();
@@ -1037,7 +1042,7 @@ function startAppMusic(){
 function youtubeEmbedSrc({autoplay=false}={}){
   if(!state.youtubeId) return '';
   const params=new URLSearchParams({
-    autoplay:autoplay?'1':'0', mute:'0', controls:'1', rel:'0', modestbranding:'1', playsinline:'1', enablejsapi:'1', fs:'1', iv_load_policy:'3'
+    autoplay:autoplay?'1':'0', mute:'0', controls:'0', rel:'0', modestbranding:'1', playsinline:'1', enablejsapi:'1', fs:'0', iv_load_policy:'3'
   });
   if(location.protocol.startsWith('http')) params.set('origin',location.origin);
   return `https://www.youtube.com/embed/${state.youtubeId}?${params.toString()}`;
@@ -1055,12 +1060,11 @@ function createYoutubeFrame({autoplay=false}={}){
   }
   frame=document.createElement('iframe');
   frame.id='ytFrame';
-  frame.title='Música da homenagem no YouTube';
+  frame.title='Áudio da homenagem';
   frame.src=youtubeEmbedSrc({autoplay});
   frame.loading='eager';
   frame.dataset.autoplayRequested=autoplay?'1':'';
-  frame.setAttribute('allow','autoplay; encrypted-media; picture-in-picture; fullscreen');
-  frame.setAttribute('allowfullscreen','');
+  frame.setAttribute('allow','autoplay; encrypted-media');
   frame.setAttribute('referrerpolicy','strict-origin-when-cross-origin');
   holder.innerHTML='';
   holder.appendChild(frame);
@@ -1087,10 +1091,8 @@ function startMusic(showMsg=true){
   tryPlay();
   setTimeout(tryPlay,250);
   setTimeout(tryPlay,900);
-  const playerBox=document.querySelector('.story-youtube-player');
-  if(playerBox) playerBox.classList.add('active');
   if(showMsg){
-    showModal('Música pronta','A música foi carregada. Caso o celular não inicie sozinho, toque no botão ▶ dentro do player exibido na homenagem.');
+    showModal('Música da homenagem','A música foi acionada. Caso o navegador bloqueie o início automático, toque novamente no botão “Música”.');
   }
 }
 function initMusic(){
