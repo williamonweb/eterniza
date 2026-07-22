@@ -905,17 +905,20 @@ function initStorytelling(){
       const goToStart=()=>{
         const target=$('storyPrologue') || $('liveCounter') || content;
         if(!target) return;
-        const top=Math.max(0,target.getBoundingClientRect().top + window.scrollY - 12);
+        const rect=target.getBoundingClientRect();
+        const top=Math.max(0,window.scrollY + rect.top - ((window.innerHeight - rect.height) / 2));
         window.scrollTo({top,behavior:'smooth'});
       };
 
+      // Inicia o prólogo primeiro e, depois que o navegador recalcular o layout,
+      // mantém exatamente a área das frases e da contagem 3, 2, 1 no centro.
+      runPrologue();
       requestAnimationFrame(()=>{
         requestAnimationFrame(goToStart);
       });
-      setTimeout(goToStart,180);
-      setTimeout(goToStart,520);
-
-      runPrologue();
+      setTimeout(goToStart,300);
+      setTimeout(goToStart,900);
+      setTimeout(goToStart,1500);
 
       setTimeout(()=>{
         runCineSlides();
@@ -1067,6 +1070,10 @@ function startMusic(showMsg=true){
   stopAppMusic();
   const frame=createYoutubeFrame({autoplay:false});
   if(!frame) return;
+  // O clique em “Abrir surpresa” atualiza o iframe para autoplay diretamente
+  // dentro do gesto do usuário, aumentando a compatibilidade em celular.
+  const autoplaySrc=youtubeEmbedSrc({autoplay:true});
+  if(autoplaySrc && frame.src!==autoplaySrc) frame.src=autoplaySrc;
   if(b){b.textContent='♫ Música ligada'; b.classList.add('playing')}
   const tryPlay=()=>{
     commandYoutube(frame,'unMute');
