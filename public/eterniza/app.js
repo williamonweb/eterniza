@@ -747,7 +747,7 @@ function renderPreview(){
         ${p.id==='premium'&&dateLabel?`<p class="story-date"><b>Data especial:</b> ${dateLabel}</p>`:''}
         <article class="story-letter" id="cineLetter"><h3>Uma carta para você</h3><p id="typedLetter"></p></article>
         <div class="story-final" id="cineFinal"><span>${r.emoji}</span><strong>Essa lembrança fica guardada aqui.</strong><em>Com carinho, ${esc(state.senderName)}</em></div>
-        ${state.youtubeId?`<div class="youtube-audio-host" id="ytHolder" aria-hidden="true"></div>`:''}
+        ${state.youtubeId?`<div id="ytHolder" class="youtube-audio-host" aria-hidden="true"></div>`:''}
       </div>
     </section>`;
   $('orderSummary').innerHTML=`<div class="order-line"><span>Cliente</span><strong>${esc(state.userEmail||'-')}</strong></div><div class="order-line"><span>Para</span><strong>${esc(r.title)}</strong></div><div class="order-line"><span>Tema</span><strong>${esc(r.theme)}</strong></div><div class="order-line"><span>Plano</span><strong>${esc(p.name)}</strong></div><div class="order-line"><span>Valor</span><strong>${esc(p.price)}</strong></div><div class="order-line"><span>Fotos</span><strong>${photoList.length}/${planPhotoLimit(p)}</strong></div><div class="order-line"><span>Validade</span><strong>${esc(p.duration)}</strong></div>`;
@@ -879,72 +879,53 @@ function scrollStoryToPhotos(){
 function initStorytelling(){
   const open=$('storyOpen'), content=$('storyContent'), start=$('startSurprise');
   if(!start) return;
+
+  // Deixa o iframe de áudio pronto antes do clique. Assim, o clique do usuário
+  // pode iniciar a música imediatamente, sem mostrar qualquer player na tela.
+  if(state.youtubeId) createYoutubeFrame({autoplay:false});
+
   let started=false;
   start.onclick=()=>{
-    if(started) return; started=true;
-
+    if(started) return;
+    started=true;
     start.disabled=true;
     start.setAttribute('aria-busy','true');
 
-    const prologue=$('storyPrologue');
-    const stage=$('storyStage');
-    const scrollToPrologue=({smooth=true}={})=>{
-      const target=prologue||stage||content;
-      if(!target) return;
-
-      // O início da homenagem deve ocupar a tela a partir do topo,
-      // mostrando a frase cinematográfica e a contagem regressiva.
-      const rect=target.getBoundingClientRect();
-      const top=Math.max(0,window.scrollY+rect.top-8);
-
-      try{
-        window.scrollTo({top,behavior:smooth?'smooth':'auto'});
-      }catch(error){
-        window.scrollTo(0,top);
-      }
-
-      // Quando a homenagem estiver dentro de um iframe, solicita também
-      // que a página externa posicione a prévia na área visível.
-      try{
-        if(window.parent&&window.parent!==window){
-          window.parent.postMessage({type:'eterniza:focus-story'},'*');
-        }
-      }catch(error){}
-    };
-
+    // O áudio precisa ser acionado diretamente dentro do clique do usuário.
     startMusic(false);
     open.classList.add('hide');
 
     setTimeout(()=>{
       content.classList.add('show');
 
+      // Primeiro removemos a capa do fluxo da página. Só depois calculamos a
+      // posição final, evitando que a tela pare no lugar errado quando a capa some.
+      open.style.display='none';
+
+      const goToStart=()=>{
+        const target=$('storyPrologue') || $('liveCounter') || content;
+        if(!target) return;
+        const top=Math.max(0,target.getBoundingClientRect().top + window.scrollY - 12);
+        window.scrollTo({top,behavior:'smooth'});
+      };
+
       requestAnimationFrame(()=>{
-        scrollToPrologue({smooth:true});
+        requestAnimationFrame(goToStart);
       });
+      setTimeout(goToStart,180);
+      setTimeout(goToStart,520);
+
+      runPrologue();
 
       setTimeout(()=>{
-        open.style.display='none';
-        scrollToPrologue({smooth:true});
-        setTimeout(()=>scrollToPrologue({smooth:false}),320);
-        setTimeout(()=>scrollToPrologue({smooth:false}),850);
-        runPrologue();
+        runCineSlides();
+        scrollStoryToPhotos();
+      },11200);
 
-        setTimeout(()=>{
-          runCineSlides();
-          scrollStoryToPhotos();
-        },11200);
-
-        setTimeout(typeLetter,13800);
-      },520);
-    },420);
+      setTimeout(typeLetter,13800);
+    },520);
   };
   initMusic();
-  if(state.youtubeId){
-    const preloadFrame=createYoutubeFrame({autoplay:false});
-    if(preloadFrame){
-      preloadFrame.addEventListener('load',()=>{preloadFrame.dataset.ready='true';},{once:true});
-    }
-  }
   if(systemSettings.musicAutoplay===true){
     setTimeout(()=>startMusic(false),350);
   }
@@ -1056,20 +1037,15 @@ function createYoutubeFrame({autoplay=false}={}){
   const holder=$('ytHolder');
   if(!holder||!state.youtubeId) return null;
   let frame=$('ytFrame');
-  if(frame){
-    if(autoplay && !frame.dataset.autoplayRequested){
-      frame.dataset.autoplayRequested='1';
-      frame.src=youtubeEmbedSrc({autoplay:true});
-    }
-    return frame;
-  }
+  if(frame) return frame;
   frame=document.createElement('iframe');
   frame.id='ytFrame';
   frame.title='Áudio da homenagem';
   frame.src=youtubeEmbedSrc({autoplay});
   frame.loading='eager';
-  frame.dataset.autoplayRequested=autoplay?'1':'';
   frame.setAttribute('allow','autoplay; encrypted-media');
+  frame.setAttribute('tabindex','-1');
+  frame.setAttribute('aria-hidden','true');
   frame.setAttribute('referrerpolicy','strict-origin-when-cross-origin');
   holder.innerHTML='';
   holder.appendChild(frame);
@@ -1094,25 +1070,16 @@ function startMusic(showMsg=true){
   if(b){b.textContent='♫ Música ligada'; b.classList.add('playing')}
   const tryPlay=()=>{
     commandYoutube(frame,'unMute');
-    commandYoutube(frame,'setVolume',[Math.round(Math.min(100,Math.max(0,Number(systemSettings.musicDefaultVolume||68))))]);
+    commandYoutube(frame,'setVolume',[Math.max(0,Math.min(100,Number(systemSettings.musicDefaultVolume||68)))]);
     commandYoutube(frame,'playVideo');
   };
+  // Primeiro comando acontece no próprio clique. As repetições cobrem o tempo
+  // de carregamento do iframe sem exibir controles para o visitante.
   tryPlay();
   setTimeout(tryPlay,180);
   setTimeout(tryPlay,650);
   setTimeout(tryPlay,1400);
-  // Fallback: recarrega o iframe com autoplay após o clique do usuário.
-  setTimeout(()=>{
-    try{
-      if(!frame.dataset.playFallback){
-        frame.dataset.playFallback='1';
-        frame.src=youtubeEmbedSrc({autoplay:true});
-      }
-    }catch(error){}
-  },320);
-  if(showMsg){
-    showModal('Música da homenagem','A música foi acionada. Caso o navegador bloqueie o início automático, toque novamente no botão “Música”.');
-  }
+  if(showMsg) showModal('Música','A música da homenagem foi iniciada.');
 }
 function initMusic(){
   const b=$('playMusic');
@@ -1779,14 +1746,9 @@ async function loadPublicTributeBySlug(slug){
     }
     const tribute = data.tribute;
     const content = tribute.content && typeof tribute.content === 'object' ? tribute.content : {};
-    const savedMusic = tribute.music && typeof tribute.music === 'object' ? tribute.music : {};
     state = {
       ...state,
       ...content,
-      musicMode: content.musicMode || savedMusic.mode || state.musicMode,
-      selectedTrack: content.selectedTrack || savedMusic.selectedTrack || state.selectedTrack,
-      youtubeId: content.youtubeId || savedMusic.youtubeId || youtubeId(content.youtubeLink || savedMusic.youtubeLink || ''),
-      youtubeLink: content.youtubeLink || savedMusic.youtubeLink || '',
       tributeId: tribute.id,
       slug: tribute.slug,
       publicUrl: tribute.public_url || tribute.publicUrl || `/presente/${tribute.slug}`,
