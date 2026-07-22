@@ -49,6 +49,13 @@ enum CouponDiscountType {
   FIXED
 }
 
+enum ClinicInvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
 model User {
   id          String    @id @default(cuid())
   name        String
@@ -246,6 +253,7 @@ model Clinic {
 
   users          User[]
   petExperiences PetExperience[]
+  invoices       ClinicInvoice[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -292,4 +300,26 @@ model PetExperience {
   @@index([clinicId, deletedAt])
   @@index([clinicId, createdAt])
   @@index([createdById])
+}
+
+
+model ClinicInvoice {
+  id              String              @id @default(cuid())
+  clinicId        String
+  clinic          Clinic              @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  competency      String
+  description     String              @default("Mensalidade Eterniza Pets")
+  amountCents     Int
+  dueDate         DateTime
+  status          ClinicInvoiceStatus @default(PENDING)
+  paidAt          DateTime?
+  paymentMethod   String?
+  receiptNumber   String?             @unique
+  notes           String?             @db.Text
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@unique([clinicId, competency])
+  @@index([status, dueDate])
+  @@index([clinicId, createdAt])
 }

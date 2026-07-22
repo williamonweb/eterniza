@@ -1,49 +1,24 @@
 @echo off
-chcp 65001 >nul
+title Eterniza Next.js
 cd /d "%~dp0"
-
+echo =====================================
+echo        ETERNIZA - NEXT.JS LOCAL
+echo =====================================
 echo.
-echo =========================================
-echo        ETERNIZA - SERVIDOR LOCAL
-echo =========================================
-echo.
-echo Iniciando em: http://localhost:8080
-echo.
-echo Se aparecer aviso do firewall, clique em Permitir.
-echo Para fechar o servidor, feche esta janela.
-echo.
-
-where py >nul 2>nul
-if %errorlevel%==0 (
-  start "" "http://localhost:8080"
-  py -3 -m http.server 8080
+echo Se for a primeira vez, instalando dependencias pelo npm oficial...
+if exist package-lock.json del package-lock.json
+call npm.cmd install --registry=https://registry.npmjs.org/
+if errorlevel 1 (
+  echo.
+  echo ERRO: npm install falhou.
+  echo Verifique sua internet e se o Node.js LTS esta instalado em https://nodejs.org/
   pause
   exit /b
 )
-
-where python >nul 2>nul
-if %errorlevel%==0 (
-  start "" "http://localhost:8080"
-  python -m http.server 8080
-  pause
-  exit /b
-)
-
-where python3 >nul 2>nul
-if %errorlevel%==0 (
-  start "" "http://localhost:8080"
-  python3 -m http.server 8080
-  pause
-  exit /b
-)
-
-echo ERRO: Python nao encontrado no Windows.
 echo.
-echo Solucao rapida:
-echo 1. Instale Python em https://www.python.org/downloads/
-echo 2. Na instalacao, marque a opcao Add Python to PATH.
-echo 3. Depois rode este arquivo novamente.
-echo.
-echo Alternativa: abra o index.html direto, mas o YouTube pode bloquear mais recursos.
-echo.
+echo Iniciando em http://localhost:3000
+echo Se ja existir uma janela antiga da Eterniza aberta, feche ela antes.
+echo Para parar, feche esta janela.
+start http://localhost:3000
+call npm.cmd run dev
 pause

@@ -11,6 +11,7 @@ const menu = [
   ["analytics", "⌁", "Analytics"],
   ["cupons", "◇", "Cupons"],
   ["pets", "🐾", "Eterniza Pets"],
+  ["pets-finance", "R$", "Financeiro Pets"],
   ["configuracoes", "⚙", "Configurações"],
 ];
 
@@ -56,6 +57,9 @@ export default function AdminPage() {
   const [petClinics, setPetClinics] = useState([]);
   const [petEditor, setPetEditor] = useState(null);
   const [savingClinic, setSavingClinic] = useState(false);
+  const [petFinance, setPetFinance] = useState({ invoices: [], clinics: [], metrics: {} });
+  const [financeEditor, setFinanceEditor] = useState(null);
+  const [savingFinance, setSavingFinance] = useState(false);
 
   async function load() {
     try {
@@ -73,12 +77,13 @@ export default function AdminPage() {
 
       setAuthorized(true);
 
-      const [dashboardRes, plansRes, couponsRes, settingsRes, petsRes] = await Promise.all([
+      const [dashboardRes, plansRes, couponsRes, settingsRes, petsRes, financeRes] = await Promise.all([
         fetch("/api/admin/dashboard", { cache: "no-store" }),
         fetch("/api/admin/plans", { cache: "no-store" }),
         fetch("/api/admin/coupons", { cache: "no-store" }),
         fetch("/api/admin/settings", { cache: "no-store" }),
         fetch("/api/admin/pets/clinics", { cache: "no-store" }).catch(() => null),
+        fetch("/api/admin/pets/finance", { cache: "no-store" }).catch(() => null),
       ]);
 
       const dashboardData = await dashboardRes.json().catch(() => ({}));
@@ -86,6 +91,7 @@ export default function AdminPage() {
       const couponsData = await couponsRes.json().catch(() => ({}));
       const settingsData = await settingsRes.json().catch(() => ({}));
       const petsData = petsRes ? await petsRes.json().catch(() => ({})) : {};
+      const financeData = financeRes ? await financeRes.json().catch(() => ({})) : {};
 
       if (dashboardData?.ok) setData(dashboardData);
       if (plansData?.ok && Array.isArray(plansData.plans)) {
@@ -98,6 +104,7 @@ export default function AdminPage() {
         setSettings(settingsData.settings);
       }
       if (petsData?.ok && Array.isArray(petsData.clinics)) setPetClinics(petsData.clinics);
+      if (financeData?.ok) setPetFinance({ invoices: financeData.invoices || [], clinics: financeData.clinics || [], metrics: financeData.metrics || {} });
     } catch (error) {
       console.error(error);
       setModal({
@@ -249,6 +256,45 @@ export default function AdminPage() {
       setModal({ title: "Erro na clínica", text: error.message || "Não foi possível atualizar." });
     } finally {
       setSavingClinic(false);
+    }
+  }
+
+  async function savePetInvoice(payload) {
+    setSavingFinance(true);
+    try {
+      const response = await fetch("/api/admin/pets/finance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.message || "Não foi possível criar a mensalidade.");
+      setFinanceEditor(null);
+      await load();
+      setModal({ title: "Mensalidade criada", text: result.message || "A cobrança foi registrada." });
+    } catch (error) {
+      setModal({ title: "Erro no financeiro", text: error.message || "Não foi possível criar a mensalidade." });
+    } finally {
+      setSavingFinance(false);
+    }
+  }
+
+  async function updatePetInvoice(payload) {
+    setSavingFinance(true);
+    try {
+      const response = await fetch("/api/admin/pets/finance", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) throw new Error(result.message || "Não foi possível atualizar a cobrança.");
+      await load();
+      setModal({ title: "Financeiro atualizado", text: result.message || "Cobrança atualizada." });
+    } catch (error) {
+      setModal({ title: "Erro no financeiro", text: error.message || "Não foi possível atualizar a cobrança." });
+    } finally {
+      setSavingFinance(false);
     }
   }
 
@@ -431,6 +477,17 @@ export default function AdminPage() {
             setEditor={setPetEditor}
             updateClinic={updatePetClinic}
             saving={savingClinic}
+          />
+        )}
+
+        {active === "pets-finance" && (
+          <PetsFinance
+            data={petFinance}
+            editor={financeEditor}
+            setEditor={setFinanceEditor}
+            onCreate={savePetInvoice}
+            onUpdate={updatePetInvoice}
+            saving={savingFinance}
           />
         )}
 
@@ -1019,6 +1076,100 @@ function PetClinicModal({ clinic, setClinic, onClose, onSave, saving }) {
   </div>;
 }
 
+function PetsFinance({ data, editor, setEditor, onCreate, onUpdate, saving }) {
+  const invoices = data?.invoices || [];
+  const clinics = data?.clinics || [];
+  const metrics = data?.metrics || {};
+  const currentCompetency = new Date().toISOString().slice(0, 7);
+
+  function openNew() {
+    const first = clinics[0];
+    setEditor({
+      clinicId: first?.id || "",
+      competency: currentCompetency,
+      amount: first ? (Number(first.monthlyPriceCents || 0) / 100).toFixed(2).replace(".", ",") : "",
+      dueDate: "",
+      description: first?.monthlyPackageName ? `Mensalidade ${first.monthlyPackageName}` : "Mensalidade Eterniza Pets",
+      notes: "",
+    });
+  }
+
+  function chooseClinic(id) {
+    const clinic = clinics.find((item) => item.id === id);
+    setEditor((current) => ({
+      ...current,
+      clinicId: id,
+      amount: clinic ? (Number(clinic.monthlyPriceCents || 0) / 100).toFixed(2).replace(".", ",") : current.amount,
+      description: clinic?.monthlyPackageName ? `Mensalidade ${clinic.monthlyPackageName}` : current.description,
+    }));
+  }
+
+  return (
+    <section className="section-stack">
+      <div className="section-heading">
+        <div><span className="eyebrow">Mensalidades das clínicas</span><h2>Financeiro Eterniza Pets</h2><p>Controle pagamentos mensais e emita recibos profissionais.</p></div>
+        <button className="primary" onClick={openNew} disabled={!clinics.length}>+ Nova mensalidade</button>
+      </div>
+
+      <div className="metric-grid">
+        <Metric icon="✓" value={money(Number(metrics.monthReceivedCents || 0) / 100)} label="Recebido no mês" detail={`${metrics.paidCount || 0} pagamentos confirmados`} />
+        <Metric icon="⌛" value={money(Number(metrics.pendingCents || 0) / 100)} label="A receber" detail={`${metrics.pendingCount || 0} mensalidades pendentes`} />
+        <Metric icon="!" value={money(Number(metrics.overdueCents || 0) / 100)} label="Em atraso" detail={`${metrics.overdueCount || 0} cobranças vencidas`} />
+        <Metric icon="Σ" value={money(Number(metrics.receivedCents || 0) / 100)} label="Total recebido" detail="Histórico de mensalidades" />
+      </div>
+
+      <div className="panel table-panel finance-table">
+        <div className="finance-row header"><span>Clínica</span><span>Competência</span><span>Vencimento</span><span>Valor</span><span>Status</span><span>Pagamento</span><span>Ações</span></div>
+        {invoices.map((invoice) => (
+          <div className="finance-row" key={invoice.id}>
+            <div><b>{invoice.clinic?.tradeName}</b><small>{invoice.clinic?.cnpj}</small></div>
+            <span>{formatCompetency(invoice.competency)}</span>
+            <span>{date(invoice.dueDate)}</span>
+            <b>{money(Number(invoice.amountCents || 0) / 100)}</b>
+            <em className={`status ${statusClass(invoice.status)}`}>{financeStatus(invoice.status)}</em>
+            <span>{invoice.paidAt ? `${date(invoice.paidAt)} · ${invoice.paymentMethod || "PIX"}` : "—"}</span>
+            <div className="finance-actions">
+              {invoice.status === "PAID" ? <>
+                <a href={`/admin/pets/finance/receipts/${invoice.id}`} target="_blank" rel="noreferrer">Recibo</a>
+                <button disabled={saving} onClick={() => onUpdate({ id: invoice.id, action: "REOPEN" })}>Reabrir</button>
+              </> : invoice.status !== "CANCELLED" ? <>
+                <button className="confirm" disabled={saving} onClick={() => onUpdate({ id: invoice.id, action: "MARK_PAID", paymentMethod: "PIX" })}>Marcar pago</button>
+                <button disabled={saving} onClick={() => onUpdate({ id: invoice.id, action: "CANCEL" })}>Cancelar</button>
+              </> : <span>Cancelada</span>}
+            </div>
+          </div>
+        ))}
+        {!invoices.length && <div className="empty-state">Nenhuma mensalidade registrada. Clique em “Nova mensalidade” para começar.</div>}
+      </div>
+
+      {editor && <div className="modal-overlay">
+        <div className="finance-modal">
+          <div className="panel-heading"><div><span className="eyebrow">Nova cobrança</span><h3>Mensalidade da clínica</h3></div><button onClick={() => setEditor(null)}>×</button></div>
+          <div className="finance-form-grid">
+            <label>Clínica<select value={editor.clinicId} onChange={(e) => chooseClinic(e.target.value)}><option value="">Selecione</option>{clinics.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.tradeName}</option>)}</select></label>
+            <label>Competência<input type="month" value={editor.competency} onChange={(e) => setEditor((current) => ({ ...current, competency: e.target.value }))} /></label>
+            <label>Valor mensal<input inputMode="decimal" value={editor.amount} onChange={(e) => setEditor((current) => ({ ...current, amount: e.target.value }))} placeholder="299,00" /></label>
+            <label>Vencimento opcional<input type="date" value={editor.dueDate} onChange={(e) => setEditor((current) => ({ ...current, dueDate: e.target.value }))} /></label>
+            <label className="wide">Descrição<input value={editor.description} onChange={(e) => setEditor((current) => ({ ...current, description: e.target.value }))} /></label>
+            <label className="wide">Observações<textarea value={editor.notes} onChange={(e) => setEditor((current) => ({ ...current, notes: e.target.value }))} /></label>
+          </div>
+          <div className="coupon-editor-actions"><button onClick={() => setEditor(null)}>Cancelar</button><button className="primary" disabled={saving || !editor.clinicId || !editor.competency} onClick={() => onCreate({ clinicId: editor.clinicId, competency: editor.competency, amountCents: Math.round(Number(String(editor.amount || "0").replace(",", ".")) * 100), dueDate: editor.dueDate || undefined, description: editor.description, notes: editor.notes })}>{saving ? "Salvando..." : "Criar mensalidade"}</button></div>
+        </div>
+      </div>}
+    </section>
+  );
+}
+
+function financeStatus(status) {
+  return ({ PAID: "Pago", PENDING: "Pendente", OVERDUE: "Atrasado", CANCELLED: "Cancelado" })[status] || status;
+}
+
+function formatCompetency(value) {
+  const [year, month] = String(value || "").split("-");
+  const names = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  return month && year ? `${names[Number(month) - 1]}/${year}` : value || "—";
+}
+
 function SettingsManager({
   settings,
   activeTab,
@@ -1389,9 +1540,10 @@ function Style() {
 .settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.settings-card{border:1px solid rgba(239,189,82,.13);background:linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.018));border-radius:22px;padding:21px;box-shadow:0 24px 70px rgba(0,0,0,.22)}.settings-card-head h3{font:700 25px Georgia,serif;margin:0 0 6px}.settings-card-head p{margin:0;color:#918a80}.settings-fields{display:grid;gap:12px;margin-top:18px}.setting-field{display:grid;gap:7px}.setting-field span{color:#d9c79e;font-size:12px;font-weight:900}.setting-field input,.setting-field textarea,.setting-field select{width:100%;border:1px solid rgba(239,189,82,.15);background:#101513;color:#fff;border-radius:12px;padding:12px;font:inherit}.setting-field textarea{min-height:110px;resize:vertical}.setting-field select{appearance:auto}.setting-field input[type="range"]{padding:0;background:transparent}.setting-field input:focus,.setting-field textarea:focus,.setting-field select:focus{outline:none;border-color:#efbd52;box-shadow:0 0 0 3px rgba(239,189,82,.1)}
 .setting-toggle{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;border:1px solid rgba(255,255,255,.06);border-radius:13px;padding:12px}.setting-toggle span{font-weight:900;color:#ddd3c0}.setting-toggle input{display:none}.setting-toggle i{width:42px;height:24px;border-radius:999px;background:#2d322f;position:relative}.setting-toggle i:after{content:"";position:absolute;width:18px;height:18px;border-radius:50%;background:#999;top:3px;left:3px;transition:.2s}.setting-toggle input:checked+i{background:#8d6c29}.setting-toggle input:checked+i:after{left:21px;background:#ffe094}
 .goal-preview{display:grid;gap:12px}.goal-preview div:not(.goal-track){display:flex;justify-content:space-between;gap:12px;color:#aaa194}.goal-preview strong{color:#fff3d5}.goal-track{height:13px;border-radius:999px;background:#1e2522;overflow:hidden}.goal-track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#c99337,#f7dc82)}.goal-preview b{color:#efbd52}.pets-admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}.pet-clinic-card{padding:22px;border-radius:20px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035)}.pet-clinic-head{display:flex;justify-content:space-between;gap:15px}.pet-clinic-head h3{margin:5px 0}.pet-clinic-head small,.pet-clinic-head span{color:#9da7b5}.pet-clinic-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0}.pet-clinic-meta span,.clinic-detail-grid span{color:#8f99a8;font-size:12px}.pet-clinic-meta b,.clinic-detail-grid b{display:block;color:#fff;margin-top:4px}.pet-clinic-actions{display:flex;gap:8px;flex-wrap:wrap}.pet-clinic-actions button{min-height:40px;padding:0 13px;border-radius:10px}.rejection{color:#ffb1ba}.pet-modal{width:min(820px,94vw);max-height:92vh;overflow:auto;background:#0c1118;border:1px solid rgba(255,255,255,.12);border-radius:22px;padding:24px}.clinic-detail-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px;border-radius:14px;background:rgba(255,255,255,.035);margin-bottom:18px}.integration-status{display:grid;gap:12px}.integration-status p{margin:0;color:#aaa194;line-height:1.55}
+.finance-table{padding:8px 20px}.finance-row{display:grid;grid-template-columns:1.25fr .7fr .75fr .7fr .65fr 1fr 1.2fr;gap:12px;align-items:center;padding:14px 4px;border-top:1px solid rgba(255,255,255,.065);min-width:1050px}.finance-row.header{border-top:0;color:#847e75;text-transform:uppercase;font-size:10px;font-weight:1000}.finance-row b,.finance-row small{display:block}.finance-row small{color:#8f887e;margin-top:4px}.finance-actions{display:flex;gap:6px;flex-wrap:wrap}.finance-actions button,.finance-actions a{border:1px solid rgba(239,189,82,.16);background:rgba(255,255,255,.04);color:#fff;border-radius:9px;padding:8px 10px;font-size:11px;font-weight:900;text-decoration:none;cursor:pointer}.finance-actions .confirm{color:#8dffb2;border-color:rgba(69,194,113,.25)}.finance-modal{width:min(760px,94vw);max-height:92vh;overflow:auto;background:#0c1110;border:1px solid rgba(239,189,82,.2);border-radius:22px;padding:24px}.finance-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.finance-form-grid label{display:grid;gap:7px;color:#d8c9a9;font-size:12px;font-weight:900}.finance-form-grid label.wide{grid-column:1/-1}.finance-form-grid input,.finance-form-grid select,.finance-form-grid textarea{width:100%;border:1px solid rgba(239,189,82,.15);background:#101513;color:#fff;border-radius:11px;padding:12px;font:inherit}.finance-form-grid textarea{min-height:90px;resize:vertical}
 @media(max-width:1180px){.admin-page{grid-template-columns:220px 1fr}.metric-grid,.plans-grid{grid-template-columns:1fr 1fr}.business-grid{grid-template-columns:1fr}}
 @media(max-width:980px){.coupon-admin-grid{grid-template-columns:1fr 1fr}.coupon-form-grid{grid-template-columns:1fr 1fr}}
-@media(max-width:760px){.settings-grid,.coupon-admin-grid,.coupon-form-grid{grid-template-columns:1fr}.admin-page{display:block}.sidebar{height:auto;position:static}.sidebar nav{grid-template-columns:1fr 1fr}.sidebar-footer{display:none}.workspace{padding:20px 14px}.topbar,.welcome,.section-heading{align-items:flex-start;flex-direction:column}.metric-grid,.plans-grid{grid-template-columns:1fr}.first-sale{min-width:0;width:100%}.field-grid{grid-template-columns:1fr}}
+@media(max-width:760px){.finance-form-grid{grid-template-columns:1fr}.finance-form-grid label.wide{grid-column:auto}.settings-grid,.coupon-admin-grid,.coupon-form-grid{grid-template-columns:1fr}.admin-page{display:block}.sidebar{height:auto;position:static}.sidebar nav{grid-template-columns:1fr 1fr}.sidebar-footer{display:none}.workspace{padding:20px 14px}.topbar,.welcome,.section-heading{align-items:flex-start;flex-direction:column}.metric-grid,.plans-grid{grid-template-columns:1fr}.first-sale{min-width:0;width:100%}.field-grid{grid-template-columns:1fr}}
 `}</style>
   );
 }

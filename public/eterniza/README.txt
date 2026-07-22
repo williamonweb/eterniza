@@ -1,20 +1,21 @@
-Eterniza Storytelling v0.8
+ETERNIZA V53 - NEON + AUTOSAVE
 
-Atualizações:
-- Visual inspirado no conceito de contador/bodas, com identidade própria da Eterniza.
-- Fonte cursiva elegante para nomes.
-- Carrossel 3D com foto central e fotos laterais.
-- Bodas automáticas para casais.
-- Estatísticas emocionais: dias, horas, minutos, segundos, finais de semana, luas cheias, Dias dos Namorados e Natais.
-- Prévia de música agora tem pausa/continuar.
-- Rotas continuam funcionando em #/presente/nome-do-presente.
+1) Copie .env.example e crie um arquivo chamado .env.local
+2) Cole sua DATABASE_URL do Neon no .env.local
+3) Rode:
+   npm.cmd install --registry=https://registry.npmjs.org/
+   npm.cmd run dev
+4) Abra http://localhost:3000
 
-Abra o index.html no navegador.
+Nesta versão:
+- Login e cadastro usam o banco Neon.
+- Usuário admin padrão:
+  email: jeslie@eterniza.com
+  senha: eterniza123
+- Cliente comum entra em /criar.
+- Ao montar a homenagem, o rascunho salva automaticamente no Neon.
+- O painel admin começa a puxar homenagens reais do banco.
 
-
-V20: A prévia do YouTube agora é modo áudio, sem vídeo aparecendo. Para evitar erro 153 em teste local, abra pelo arquivo iniciar-eterniza.bat e acesse http://localhost:8080.
-
-V21: Arquivo iniciar-eterniza.bat corrigido para Windows.
-- Tenta usar py, python ou python3.
-- Mostra erro claro se Python nao estiver instalado.
-- Tambem inclui iniciar-eterniza.ps1 como alternativa pelo PowerShell.
+IMPORTANTE:
+A DATABASE_URL não foi colocada no ZIP por segurança. Crie o arquivo .env.local localmente.
+Antes de publicar, gere uma nova senha no Neon porque a string foi compartilhada no chat.
