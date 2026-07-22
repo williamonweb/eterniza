@@ -889,14 +889,13 @@ function initStorytelling(){
     const prologue=$('storyPrologue');
     const stage=$('storyStage');
     const scrollToPrologue=({smooth=true}={})=>{
-      const target=stage||content||prologue;
+      const target=prologue||stage||content;
       if(!target) return;
 
+      // O início da homenagem deve ocupar a tela a partir do topo,
+      // mostrando a frase cinematográfica e a contagem regressiva.
       const rect=target.getBoundingClientRect();
-      const viewportHeight=window.innerHeight||document.documentElement.clientHeight||0;
-      const targetHeight=Math.min(rect.height||0,760);
-      const centeredOffset=Math.max(12,(viewportHeight-targetHeight)/2);
-      const top=Math.max(0,window.scrollY+rect.top-centeredOffset);
+      const top=Math.max(0,window.scrollY+rect.top-8);
 
       try{
         window.scrollTo({top,behavior:smooth?'smooth':'auto'});
@@ -940,6 +939,12 @@ function initStorytelling(){
     },420);
   };
   initMusic();
+  if(state.youtubeId){
+    const preloadFrame=createYoutubeFrame({autoplay:false});
+    if(preloadFrame){
+      preloadFrame.addEventListener('load',()=>{preloadFrame.dataset.ready='true';},{once:true});
+    }
+  }
   if(systemSettings.musicAutoplay===true){
     setTimeout(()=>startMusic(false),350);
   }
@@ -1074,7 +1079,7 @@ function commandYoutube(frame,func,args=''){
   try{frame.contentWindow.postMessage(JSON.stringify({event:'command',func,args}),'*')}catch(e){}
 }
 function startMusic(showMsg=true){
-  const mode=state.musicMode||'app-romantica';
+  const mode=state.youtubeId ? 'youtube' : (state.musicMode||'app-romantica');
   const b=$('playMusic');
   if(mode !== 'youtube'){
     const ok=startAppMusic();
@@ -1084,13 +1089,27 @@ function startMusic(showMsg=true){
   }
   if(!state.youtubeId) return;
   stopAppMusic();
-  const frame=createYoutubeFrame({autoplay:true});
+  const frame=createYoutubeFrame({autoplay:false});
   if(!frame) return;
-  if(b){b.textContent='♫ Música pronta'; b.classList.add('playing')}
-  const tryPlay=()=>{commandYoutube(frame,'unMute');commandYoutube(frame,'setVolume',[100]);commandYoutube(frame,'playVideo')};
+  if(b){b.textContent='♫ Música ligada'; b.classList.add('playing')}
+  const tryPlay=()=>{
+    commandYoutube(frame,'unMute');
+    commandYoutube(frame,'setVolume',[Math.round(Math.min(100,Math.max(0,Number(systemSettings.musicDefaultVolume||68))))]);
+    commandYoutube(frame,'playVideo');
+  };
   tryPlay();
-  setTimeout(tryPlay,250);
-  setTimeout(tryPlay,900);
+  setTimeout(tryPlay,180);
+  setTimeout(tryPlay,650);
+  setTimeout(tryPlay,1400);
+  // Fallback: recarrega o iframe com autoplay após o clique do usuário.
+  setTimeout(()=>{
+    try{
+      if(!frame.dataset.playFallback){
+        frame.dataset.playFallback='1';
+        frame.src=youtubeEmbedSrc({autoplay:true});
+      }
+    }catch(error){}
+  },320);
   if(showMsg){
     showModal('Música da homenagem','A música foi acionada. Caso o navegador bloqueie o início automático, toque novamente no botão “Música”.');
   }
@@ -1760,9 +1779,14 @@ async function loadPublicTributeBySlug(slug){
     }
     const tribute = data.tribute;
     const content = tribute.content && typeof tribute.content === 'object' ? tribute.content : {};
+    const savedMusic = tribute.music && typeof tribute.music === 'object' ? tribute.music : {};
     state = {
       ...state,
       ...content,
+      musicMode: content.musicMode || savedMusic.mode || state.musicMode,
+      selectedTrack: content.selectedTrack || savedMusic.selectedTrack || state.selectedTrack,
+      youtubeId: content.youtubeId || savedMusic.youtubeId || youtubeId(content.youtubeLink || savedMusic.youtubeLink || ''),
+      youtubeLink: content.youtubeLink || savedMusic.youtubeLink || '',
       tributeId: tribute.id,
       slug: tribute.slug,
       publicUrl: tribute.public_url || tribute.publicUrl || `/presente/${tribute.slug}`,
