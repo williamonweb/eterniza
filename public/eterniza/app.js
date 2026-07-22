@@ -747,7 +747,11 @@ function renderPreview(){
         ${p.id==='premium'&&dateLabel?`<p class="story-date"><b>Data especial:</b> ${dateLabel}</p>`:''}
         <article class="story-letter" id="cineLetter"><h3>Uma carta para você</h3><p id="typedLetter"></p></article>
         <div class="story-final" id="cineFinal"><span>${r.emoji}</span><strong>Essa lembrança fica guardada aqui.</strong><em>Com carinho, ${esc(state.senderName)}</em></div>
-        ${state.youtubeId?`<div id="ytHolder" class="youtube-audio-host" aria-hidden="true"></div>`:''}
+        ${state.youtubeId?`<section class="story-youtube-player" aria-label="Música da homenagem">
+          <div class="story-youtube-copy"><strong>🎵 Música da homenagem</strong><span>Toque no player para ouvir. Alguns celulares exigem esse toque por segurança.</span></div>
+          <div class="music-frame-wrap" id="ytHolder"></div>
+          <a class="ghost-btn small youtube-open-link" href="https://www.youtube.com/watch?v=${encodeURIComponent(state.youtubeId)}" target="_blank" rel="noopener noreferrer">Abrir no YouTube</a>
+        </section>`:''}
       </div>
     </section>`;
   $('orderSummary').innerHTML=`<div class="order-line"><span>Cliente</span><strong>${esc(state.userEmail||'-')}</strong></div><div class="order-line"><span>Para</span><strong>${esc(r.title)}</strong></div><div class="order-line"><span>Tema</span><strong>${esc(r.theme)}</strong></div><div class="order-line"><span>Plano</span><strong>${esc(p.name)}</strong></div><div class="order-line"><span>Valor</span><strong>${esc(p.price)}</strong></div><div class="order-line"><span>Fotos</span><strong>${photoList.length}/${planPhotoLimit(p)}</strong></div><div class="order-line"><span>Validade</span><strong>${esc(p.duration)}</strong></div>`;
@@ -879,51 +883,51 @@ function scrollStoryToPhotos(){
 function initStorytelling(){
   const open=$('storyOpen'), content=$('storyContent'), start=$('startSurprise');
   if(!start) return;
-
-  // Deixa o iframe de áudio pronto antes do clique. Assim, o clique do usuário
-  // pode iniciar a música imediatamente, sem mostrar qualquer player na tela.
-  if(state.youtubeId) createYoutubeFrame({autoplay:false});
-
   let started=false;
   start.onclick=()=>{
-    if(started) return;
-    started=true;
+    if(started) return; started=true;
+
     start.disabled=true;
     start.setAttribute('aria-busy','true');
 
-    // O áudio precisa ser acionado diretamente dentro do clique do usuário.
+    const prologue=$('storyPrologue');
+    const scrollToPrologue=()=>{
+      try{
+        if(prologue){
+          prologue.scrollIntoView({behavior:'smooth',block:'start'});
+        }else if(content){
+          content.scrollIntoView({behavior:'smooth',block:'start'});
+        }
+      }catch(error){
+        if(prologue){
+          window.scrollTo(0,prologue.getBoundingClientRect().top + window.scrollY);
+        }
+      }
+    };
+
     startMusic(false);
     open.classList.add('hide');
 
     setTimeout(()=>{
       content.classList.add('show');
 
-      // Primeiro removemos a capa do fluxo da página. Só depois calculamos a
-      // posição final, evitando que a tela pare no lugar errado quando a capa some.
-      open.style.display='none';
-
-      const goToStart=()=>{
-        const target=$('storyPrologue') || $('liveCounter') || content;
-        if(!target) return;
-        const top=Math.max(0,target.getBoundingClientRect().top + window.scrollY - 12);
-        window.scrollTo({top,behavior:'smooth'});
-      };
-
       requestAnimationFrame(()=>{
-        requestAnimationFrame(goToStart);
+        scrollToPrologue();
+        setTimeout(scrollToPrologue,220);
       });
-      setTimeout(goToStart,180);
-      setTimeout(goToStart,520);
-
-      runPrologue();
 
       setTimeout(()=>{
-        runCineSlides();
-        scrollStoryToPhotos();
-      },11200);
+        open.style.display='none';
+        runPrologue();
 
-      setTimeout(typeLetter,13800);
-    },520);
+        setTimeout(()=>{
+          runCineSlides();
+          scrollStoryToPhotos();
+        },11200);
+
+        setTimeout(typeLetter,13800);
+      },520);
+    },420);
   };
   initMusic();
   if(systemSettings.musicAutoplay===true){
@@ -1028,7 +1032,7 @@ function startAppMusic(){
 function youtubeEmbedSrc({autoplay=false}={}){
   if(!state.youtubeId) return '';
   const params=new URLSearchParams({
-    autoplay:autoplay?'1':'0', mute:'0', controls:'0', rel:'0', modestbranding:'1', playsinline:'1', enablejsapi:'1', fs:'0', iv_load_policy:'3'
+    autoplay:autoplay?'1':'0', mute:'0', controls:'1', rel:'0', modestbranding:'1', playsinline:'1', enablejsapi:'1', fs:'1', iv_load_policy:'3'
   });
   if(location.protocol.startsWith('http')) params.set('origin',location.origin);
   return `https://www.youtube.com/embed/${state.youtubeId}?${params.toString()}`;
@@ -1037,15 +1041,21 @@ function createYoutubeFrame({autoplay=false}={}){
   const holder=$('ytHolder');
   if(!holder||!state.youtubeId) return null;
   let frame=$('ytFrame');
-  if(frame) return frame;
+  if(frame){
+    if(autoplay && !frame.dataset.autoplayRequested){
+      frame.dataset.autoplayRequested='1';
+      frame.src=youtubeEmbedSrc({autoplay:true});
+    }
+    return frame;
+  }
   frame=document.createElement('iframe');
   frame.id='ytFrame';
-  frame.title='Áudio da homenagem';
+  frame.title='Música da homenagem no YouTube';
   frame.src=youtubeEmbedSrc({autoplay});
   frame.loading='eager';
-  frame.setAttribute('allow','autoplay; encrypted-media');
-  frame.setAttribute('tabindex','-1');
-  frame.setAttribute('aria-hidden','true');
+  frame.dataset.autoplayRequested=autoplay?'1':'';
+  frame.setAttribute('allow','autoplay; encrypted-media; picture-in-picture; fullscreen');
+  frame.setAttribute('allowfullscreen','');
   frame.setAttribute('referrerpolicy','strict-origin-when-cross-origin');
   holder.innerHTML='';
   holder.appendChild(frame);
@@ -1055,7 +1065,7 @@ function commandYoutube(frame,func,args=''){
   try{frame.contentWindow.postMessage(JSON.stringify({event:'command',func,args}),'*')}catch(e){}
 }
 function startMusic(showMsg=true){
-  const mode=state.youtubeId ? 'youtube' : (state.musicMode||'app-romantica');
+  const mode=state.musicMode||'app-romantica';
   const b=$('playMusic');
   if(mode !== 'youtube'){
     const ok=startAppMusic();
@@ -1065,21 +1075,18 @@ function startMusic(showMsg=true){
   }
   if(!state.youtubeId) return;
   stopAppMusic();
-  const frame=createYoutubeFrame({autoplay:false});
+  const frame=createYoutubeFrame({autoplay:true});
   if(!frame) return;
-  if(b){b.textContent='♫ Música ligada'; b.classList.add('playing')}
-  const tryPlay=()=>{
-    commandYoutube(frame,'unMute');
-    commandYoutube(frame,'setVolume',[Math.max(0,Math.min(100,Number(systemSettings.musicDefaultVolume||68)))]);
-    commandYoutube(frame,'playVideo');
-  };
-  // Primeiro comando acontece no próprio clique. As repetições cobrem o tempo
-  // de carregamento do iframe sem exibir controles para o visitante.
+  if(b){b.textContent='♫ Música pronta'; b.classList.add('playing')}
+  const tryPlay=()=>{commandYoutube(frame,'unMute');commandYoutube(frame,'setVolume',[100]);commandYoutube(frame,'playVideo')};
   tryPlay();
-  setTimeout(tryPlay,180);
-  setTimeout(tryPlay,650);
-  setTimeout(tryPlay,1400);
-  if(showMsg) showModal('Música','A música da homenagem foi iniciada.');
+  setTimeout(tryPlay,250);
+  setTimeout(tryPlay,900);
+  const playerBox=document.querySelector('.story-youtube-player');
+  if(playerBox) playerBox.classList.add('active');
+  if(showMsg){
+    showModal('Música pronta','A música foi carregada. Caso o celular não inicie sozinho, toque no botão ▶ dentro do player exibido na homenagem.');
+  }
 }
 function initMusic(){
   const b=$('playMusic');
