@@ -17,7 +17,7 @@ export async function generateMetadata({ params }) {
 
   const title = titleFor(experience?.petName);
   const description = "Clique para abrir esta homenagem especial preparada com muito carinho. ❤️";
-  const image = `/pets/experiencia/${encodeURIComponent(slug)}/opengraph-image`;
+  const image = "/eterniza/assets/pets/brands/logo-eterniza-card.png";
 
   return {
     title,
