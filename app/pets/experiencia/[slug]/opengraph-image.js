@@ -8,8 +8,19 @@ export const contentType = "image/png";
 
 function firstPhoto(photos) {
   if (!Array.isArray(photos) || !photos.length) return null;
-  const item = photos[0];
-  return typeof item === "string" ? item : item?.url || item?.src || null;
+
+  for (const item of photos) {
+    if (typeof item === "string" && item.trim()) return item.trim();
+
+    if (item && typeof item === "object") {
+      // As fotos enviadas pelo painel são salvas como { dataUrl, name, ... }.
+      // Mantemos também compatibilidade com fotos antigas salvas como url/src.
+      const value = item.dataUrl || item.dataURL || item.url || item.src;
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+  }
+
+  return null;
 }
 
 export default async function Image({ params }) {
