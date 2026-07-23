@@ -695,8 +695,26 @@ function aiSuggestion(){
   $('letterText').value=suggestion.slice(0,Number(systemSettings.aiMaxCharacters||3000));
   showModal('Texto criado','Criei uma sugestão mais completa. Você pode editar tudo antes de gerar a homenagem.');
 }
-async function buildPreview(){if(!state.recipient)return showModal('Falta informação','Escolha para quem é a homenagem.');if(!state.plan){renderPlans();go('planScreen');return showModal('Escolha o plano','Selecione um plano antes de continuar.');}state.receiverName=$('receiverName').value.trim();state.senderName=$('senderName').value.trim();state.specialDate=$('specialDate').value;state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();state.youtubeLink=$('youtubeLink').value.trim();state.letterText=$('letterText').value.trim();state.primaryColor=$('primaryColor').value;state.secondaryColor=$('secondaryColor').value;if(!state.receiverName||!state.senderName||!state.letterText)return showModal('Campos obrigatórios','Preencha quem recebe, quem envia e a carta.');const id=youtubeId(state.youtubeLink);if(state.musicMode==='youtube'&&state.youtubeLink&&!id)return showModal('Link inválido','Cole um link válido do YouTube.');state.youtubeId=state.musicMode==='youtube'?id:'';state.photos=(Array.isArray(state.photos)?state.photos:[]).slice(0,planPhotoLimit(state.plan));saveState();renderPreview();go('previewScreen')}
+async function buildPreview(){delete document.body.dataset.publicGift;if(!state.recipient)return showModal('Falta informação','Escolha para quem é a homenagem.');if(!state.plan){renderPlans();go('planScreen');return showModal('Escolha o plano','Selecione um plano antes de continuar.');}state.receiverName=$('receiverName').value.trim();state.senderName=$('senderName').value.trim();state.specialDate=$('specialDate').value;state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();state.youtubeLink=$('youtubeLink').value.trim();state.letterText=$('letterText').value.trim();state.primaryColor=$('primaryColor').value;state.secondaryColor=$('secondaryColor').value;if(!state.receiverName||!state.senderName||!state.letterText)return showModal('Campos obrigatórios','Preencha quem recebe, quem envia e a carta.');const id=youtubeId(state.youtubeLink);if(state.musicMode==='youtube'&&state.youtubeLink&&!id)return showModal('Link inválido','Cole um link válido do YouTube.');state.youtubeId=state.musicMode==='youtube'?id:'';state.photos=(Array.isArray(state.photos)?state.photos:[]).slice(0,planPhotoLimit(state.plan));saveState();renderPreview();go('previewScreen')}
 function esc(txt){return String(txt||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function previewProtectionId(){
+  const base=[state.tributeId,state.userEmail,state.receiverName,state.senderName,state.specialDate].filter(Boolean).join('|');
+  let hash=2166136261;
+  for(let i=0;i<base.length;i++){
+    hash^=base.charCodeAt(i);
+    hash=Math.imul(hash,16777619);
+  }
+  return `PREV-${(hash>>>0).toString(16).toUpperCase().padStart(8,'0').slice(0,8)}`;
+}
+function previewProtectionMarkup(){
+  const previewId=previewProtectionId();
+  const receiver=esc(state.receiverName||'Homenagem');
+  const sender=esc(state.senderName||'Eterniza');
+  const stamp=new Date().toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'});
+  const tile=`<span><b>ETERNIZA • PRÉVIA</b><small>Para: ${receiver} • De: ${sender}</small><em>${previewId}</em></span>`;
+  return `<div class="preview-security" aria-hidden="true"><div class="preview-watermark-track">${tile.repeat(18)}</div><div class="preview-security-id">${previewId}<small>${esc(stamp)}</small></div></div><div class="preview-security-bar">🔒 Prévia protegida • A versão definitiva, sem marca d’água, é liberada após o pagamento.</div>`;
+}
+
 function renderPreview(){
   if(timer) clearInterval(timer);
   if(carouselTimer) clearInterval(carouselTimer);
@@ -710,6 +728,7 @@ function renderPreview(){
   $('giftPreview').style.setProperty('--s',state.secondaryColor||'#8e5cff');
   $('giftPreview').innerHTML=`
     <section class="story-stage" id="storyStage">
+      ${previewProtectionMarkup()}
       <div class="story-ambient"></div>
       <div class="story-particles" aria-hidden="true"></div>
       <div class="story-open" id="storyOpen">

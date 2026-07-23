@@ -1112,3 +1112,20 @@ a.demo-open-link{
   height:2px!important;
   border:0!important;
 }
+
+
+/* v64.4 — Preview seguro com marca d'água dinâmica */
+.story-stage{position:relative}
+.preview-security{position:absolute;inset:0;z-index:90;overflow:hidden;pointer-events:none;border-radius:inherit}
+.preview-watermark-track{position:absolute;inset:-30%;display:grid;grid-template-columns:repeat(3,minmax(260px,1fr));gap:72px 44px;align-content:center;transform:rotate(-22deg);animation:eternizaPreviewDrift 18s linear infinite;opacity:.13}
+.preview-watermark-track span{display:flex;min-height:100px;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.65);white-space:nowrap}
+.preview-watermark-track b{font-size:20px;letter-spacing:.14em}
+.preview-watermark-track small{font-size:11px;margin-top:7px;letter-spacing:.04em}
+.preview-watermark-track em{font-style:normal;font-weight:900;font-size:10px;margin-top:5px;letter-spacing:.18em}
+.preview-security-id{position:fixed;right:14px;bottom:54px;z-index:92;padding:8px 10px;border-radius:10px;background:rgba(0,0,0,.48);border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.86);font-size:10px;font-weight:900;letter-spacing:.08em;backdrop-filter:blur(8px)}
+.preview-security-id small{display:block;margin-top:3px;font-size:9px;font-weight:700;letter-spacing:0;opacity:.78}
+.preview-security-bar{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:95;width:min(calc(100% - 24px),760px);padding:10px 15px;border-radius:14px;background:rgba(8,10,16,.9);border:1px solid rgba(255,255,255,.18);box-shadow:0 12px 40px rgba(0,0,0,.45);backdrop-filter:blur(14px);color:#fff;text-align:center;font-size:12px;font-weight:850;line-height:1.35;pointer-events:none}
+body[data-public-gift="true"] .preview-security,body[data-public-gift="true"] .preview-security-bar{display:none!important}
+@keyframes eternizaPreviewDrift{0%{transform:translate3d(-80px,-50px,0) rotate(-22deg)}100%{transform:translate3d(80px,50px,0) rotate(-22deg)}}
+@media(max-width:640px){.preview-watermark-track{grid-template-columns:repeat(2,minmax(210px,1fr));gap:56px 24px;opacity:.15}.preview-watermark-track b{font-size:16px}.preview-watermark-track small{font-size:9px}.preview-security-bar{bottom:8px;font-size:11px;padding:9px 12px}.preview-security-id{right:8px;bottom:58px}}
+@media(prefers-reduced-motion:reduce){.preview-watermark-track{animation:none}}
