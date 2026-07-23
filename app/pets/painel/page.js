@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   ["experiences", "♥", "Experiências"],
   ["team", "◉", "Equipe"],
   ["reports", "⌁", "Relatórios"],
+  ["finance", "R$", "Faturas"],
   ["settings", "⚙", "Configurações"],
 ];
 
@@ -33,6 +34,8 @@ export default function PetsPanelPage() {
   const [experiences, setExperiences] = useState([]);
   const [experienceLoading, setExperienceLoading] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [invoiceData, setInvoiceData] = useState(null);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
 
   async function loadDashboard() {
     setLoading(true);
@@ -61,6 +64,17 @@ export default function PetsPanelPage() {
     }
   }
 
+  async function loadInvoices() {
+    setInvoiceLoading(true);
+    try {
+      const response = await fetch("/api/pets/invoices", { cache: "no-store" });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result.ok) setInvoiceData(result);
+    } finally {
+      setInvoiceLoading(false);
+    }
+  }
+
   async function loadExperiences() {
     setExperienceLoading(true);
     try {
@@ -75,6 +89,7 @@ export default function PetsPanelPage() {
   useEffect(() => {
     loadDashboard();
     loadExperiences();
+    loadInvoices();
   }, []);
 
   async function logout() {
@@ -234,6 +249,14 @@ export default function PetsPanelPage() {
           />
         )}
 
+        {active === "finance" && (
+          <FinanceManager
+            data={invoiceData}
+            loading={invoiceLoading}
+            onReload={loadInvoices}
+          />
+        )}
+
         {active === "settings" && (
           <SettingsManager
             setNotice={setNotice}
@@ -262,6 +285,51 @@ export default function PetsPanelPage() {
         )}
       </section>
     </main>
+  );
+}
+
+
+function FinanceManager({ data, loading, onReload }) {
+  const invoices = Array.isArray(data?.invoices) ? data.invoices : [];
+  const metrics = data?.metrics || {};
+  const statusLabel = { PAID: "Pago", PENDING: "Em aberto", OVERDUE: "Vencida", CANCELLED: "Cancelada" };
+  const methodLabel = { PIX: "PIX", CARTAO_CREDITO: "Cartão de crédito", CARTAO_DEBITO: "Cartão de débito", DINHEIRO: "Dinheiro", TRANSFERENCIA: "Transferência", BOLETO: "Boleto", OUTRO: "Outro" };
+  const formatDate = (value) => value ? new Date(value).toLocaleDateString("pt-BR") : "—";
+  const competency = (value) => {
+    const [year, month] = String(value || "").split("-");
+    return month && year ? new Date(Number(year), Number(month) - 1, 1).toLocaleDateString("pt-BR", { month:"long", year:"numeric" }) : value;
+  };
+
+  return (
+    <section className="finance-shell">
+      <div className="section-heading-pet finance-heading">
+        <div><span className="eyebrow">Financeiro da clínica</span><h2>Faturas e pagamentos</h2><p>Acompanhe mensalidades em aberto, vencidas e pagas, com acesso aos recibos.</p></div>
+        <button className="secondary-action" onClick={onReload} disabled={loading}>{loading ? "Atualizando..." : "Atualizar"}</button>
+      </div>
+
+      <div className="finance-metrics">
+        <article><span>Em aberto</span><strong>{moneyFromCents(metrics.openCents)}</strong><small>{Number(metrics.openCount || 0)} fatura(s)</small></article>
+        <article><span>Total pago</span><strong>{moneyFromCents(metrics.paidCents)}</strong><small>{Number(metrics.paidCount || 0)} pagamento(s)</small></article>
+        <article><span>Próximo vencimento</span><strong>{formatDate(metrics.nextDueDate)}</strong><small>Fatura pendente mais próxima</small></article>
+        <article><span>Último pagamento</span><strong>{formatDate(metrics.lastPaidAt)}</strong><small>Pagamento confirmado</small></article>
+      </div>
+
+      <div className="invoice-panel">
+        <div className="invoice-table-head"><strong>Histórico de faturas</strong><span>{invoices.length} registro(s)</span></div>
+        {loading && !data ? <div className="experience-empty">Carregando faturas...</div> : invoices.length ? (
+          <div className="invoice-list">
+            {invoices.map((invoice) => (
+              <article className="invoice-row" key={invoice.id}>
+                <div className="invoice-main"><small>{competency(invoice.competency)}</small><h3>{invoice.description || "Mensalidade Eterniza Pets"}</h3><p>Vencimento: {formatDate(invoice.dueDate)}</p></div>
+                <div className="invoice-value"><span>Valor</span><strong>{moneyFromCents(invoice.amountCents)}</strong></div>
+                <div className="invoice-payment"><span>Pagamento</span><strong>{invoice.status === "PAID" ? formatDate(invoice.paidAt) : "—"}</strong><small>{methodLabel[invoice.paymentMethod] || ""}</small></div>
+                <div className="invoice-actions"><em className={`invoice-status ${String(invoice.status || "").toLowerCase()}`}>{statusLabel[invoice.status] || invoice.status}</em>{invoice.receiptUrl && <a href={invoice.receiptUrl} target="_blank" rel="noreferrer">Ver recibo</a>}</div>
+              </article>
+            ))}
+          </div>
+        ) : <div className="experience-empty"><span>R$</span><h3>Nenhuma fatura criada.</h3><p>As mensalidades geradas para a clínica aparecerão aqui.</p></div>}
+      </div>
+    </section>
   );
 }
 
@@ -1572,6 +1640,8 @@ function Style() {
       .menu-overlay{display:none}
 
       .wizard-shell,.experiences-shell{max-width:1440px;margin:25px auto 0}.wizard-head{display:grid;grid-template-columns:1fr 250px;align-items:end;gap:20px;margin-bottom:18px}.wizard-head h2,.section-heading-pet h2{font:700 38px Georgia,serif;margin:5px 0}.wizard-head p,.section-heading-pet p{color:#8fa4b1;margin:0}.wizard-progress{height:10px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden}.wizard-progress i{display:block;height:100%;background:linear-gradient(90deg,var(--pet-accent),#8bd0ff)}.type-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.type-card{min-height:180px;text-align:left;padding:23px;border-radius:20px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.035);color:#fff}.type-card:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--pet-accent) 45%,transparent);background:color-mix(in srgb,var(--pet-accent) 9%,#08131c)}.type-card span{display:block;font-size:34px}.type-card strong{display:block;font:700 22px Georgia,serif;margin:13px 0 7px}.type-card small{color:#8fa3b0;line-height:1.4}.wizard-card{padding:25px;border-radius:22px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.032)}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.form-grid.one{grid-template-columns:1fr}.story-questions{margin-top:22px;padding-top:22px;border-top:1px solid rgba(255,255,255,.08)}.story-questions-head h3{font:700 27px Georgia,serif;margin:6px 0}.story-questions-head p{color:#8fa3b0;margin:0 0 18px}.story-question{display:grid;gap:10px;margin-top:17px}.story-question strong{font-size:14px}.story-options{display:flex;gap:9px;flex-wrap:wrap}.story-options button{min-height:43px;padding:0 14px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.035);color:#d8e5ec;font-weight:850}.story-options button.selected{border-color:var(--pet-accent);background:color-mix(in srgb,var(--pet-accent) 16%,#07131d);color:#fff}.story-question input{width:100%;border:1px solid rgba(255,255,255,.12);background:#07131d;color:#fff;border-radius:13px;padding:13px 14px}.music-suggestion{display:block;color:#82a8bf;font-size:11px;font-weight:500;margin-top:4px}.form-grid label{display:grid;gap:7px;color:#dce7ed;font-size:13px;font-weight:900}.field-help{color:#7f95a3;font-size:11px;font-weight:500;line-height:1.4}.form-grid input,.form-grid select,.form-grid textarea{width:100%;border:1px solid rgba(255,255,255,.12);background:#07131d;color:#fff;border-radius:13px;padding:13px 14px;outline:none}.form-grid input:focus,.form-grid select:focus,.form-grid textarea:focus{border-color:var(--pet-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--pet-accent) 14%,transparent)}.form-grid input[type=color]{height:49px;padding:5px}.youtube-search-field{grid-column:1/-1;display:grid;gap:9px}.youtube-search-field label{color:#dce7ed;font-size:13px;font-weight:900}.youtube-search-row{display:grid;grid-template-columns:1fr auto;gap:9px}.youtube-search-row input{width:100%;border:1px solid rgba(255,255,255,.12);background:#07131d;color:#fff;border-radius:13px;padding:13px 14px}.youtube-message{color:#92a8b5}.youtube-results{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;max-height:340px;overflow:auto}.youtube-result{display:grid;grid-template-columns:92px 1fr auto;align-items:center;gap:10px;text-align:left;padding:9px;border:1px solid rgba(255,255,255,.09);border-radius:14px;background:rgba(255,255,255,.03);color:#fff}.youtube-result.selected{border-color:var(--pet-accent);background:color-mix(in srgb,var(--pet-accent) 12%,#07131d)}.youtube-result img{width:92px;height:58px;object-fit:cover;border-radius:9px}.youtube-result span strong,.youtube-result span small{display:block}.youtube-result span small{color:#8399a7;margin-top:4px}.youtube-result b{font-size:11px;color:#8fd0ff}.selected-music{display:flex;justify-content:space-between;align-items:center;padding:11px 13px;border-radius:12px;background:rgba(95,205,255,.09);color:#9bd8ff}.selected-music button{border:0;background:transparent;color:#ff9fa9}.photo-picker{display:grid;place-items:center;text-align:center;min-height:115px;margin-top:18px;border:1px dashed rgba(255,255,255,.2);border-radius:17px;background:rgba(255,255,255,.025)}.photo-picker input{display:none}.photo-picker span{font-weight:1000}.photo-picker small{color:#8498a5;margin-top:6px}.wizard-photos{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:14px}.wizard-photos div{position:relative;height:130px}.wizard-photos img{width:100%;height:100%;object-fit:cover;border-radius:14px}.wizard-photos button{position:absolute;right:6px;top:6px;width:28px;height:28px;border:0;border-radius:50%;background:rgba(0,0,0,.62);color:#fff}.wizard-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}.wizard-error{margin-top:15px;padding:13px;border-radius:12px;background:rgba(255,65,85,.11);border:1px solid rgba(255,65,85,.24);color:#ffb5be}.review-grid{display:grid;grid-template-columns:1fr 380px;gap:18px}.review-preview,.review-summary{padding:27px;border-radius:22px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.035)}.review-preview{text-align:center;background:radial-gradient(circle at 50% 0%,color-mix(in srgb,var(--preview-accent) 25%,transparent),transparent 38%),rgba(255,255,255,.03)}.review-preview span{font-size:43px}.review-preview small,.review-preview h3,.review-preview b,.review-preview em{display:block}.review-preview h3{font:700 48px Georgia,serif;margin:10px}.review-preview b{color:#9ed6ff}.review-preview img{width:100%;max-height:340px;object-fit:cover;border-radius:19px;margin:20px 0}.review-preview p{white-space:pre-wrap;color:#cad7df;line-height:1.65}.review-preview em{font-style:normal;color:#8ea5b3;margin-top:18px}.preview-button{width:100%;margin-top:20px}.review-summary h3{font:700 30px Georgia,serif;margin:8px 0}.review-summary dl{display:grid;gap:8px}.review-summary dl div{display:flex;justify-content:space-between;gap:15px;padding:12px;border-radius:11px;background:rgba(255,255,255,.035)}.review-summary dt{color:#8297a5}.review-summary dd{margin:0;font-weight:900}.review-summary p{color:#8da2af;line-height:1.5}.section-heading-pet{display:flex;justify-content:space-between;align-items:center;gap:16px}.experience-list{display:grid;gap:11px;margin-top:18px}.experience-card{display:grid;grid-template-columns:90px 1fr auto;align-items:center;gap:16px;padding:14px;border-radius:18px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.032)}.experience-cover{width:90px;height:82px;display:grid;place-items:center;border-radius:14px;background:color-mix(in srgb,var(--pet-accent) 13%,#08131c);font-size:31px;overflow:hidden}.experience-cover img{width:100%;height:100%;object-fit:cover}.experience-info small{color:#7fc7ff;font-weight:900}.experience-info h3{font:700 23px Georgia,serif;margin:4px 0}.experience-info p{color:#8da2af;margin:0}.experience-status{display:inline-flex;margin-top:7px;padding:5px 8px;border-radius:999px;font-size:9px;font-style:normal;font-weight:1000}.experience-status.published{background:rgba(70,220,145,.12);color:#8ff0bd}.experience-status.draft{background:rgba(255,190,70,.12);color:#ffd185}.experience-status.archived{background:rgba(255,255,255,.08);color:#9aabb6}.experience-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}.experience-actions a,.experience-actions button{min-height:39px;padding:0 13px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff;text-decoration:none;font-weight:900}.experience-actions .danger-mini{color:#ff9ca8}.experience-empty{text-align:center;padding:55px;border-radius:22px;border:1px dashed rgba(255,255,255,.14);margin-top:18px;color:#8ea3b0}.experience-empty span{font-size:40px}.experience-empty h3{font:700 28px Georgia,serif;color:#fff;margin:10px}.notice-overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.65);z-index:100;padding:20px}.notice-card{width:min(430px,100%);text-align:center;padding:30px;border-radius:23px;background:#0b151e;border:1px solid rgba(255,255,255,.12)}.notice-card span{width:58px;height:58px;display:grid;place-items:center;margin:auto;border-radius:17px;background:rgba(75,220,145,.15);color:#8ff0bd;font-size:28px}.notice-card h2{font:700 30px Georgia,serif}.notice-card p{color:#93a8b5;line-height:1.5}.notice-card a,.notice-card button{display:flex;align-items:center;justify-content:center;width:100%;min-height:48px;border-radius:12px;margin-top:9px;text-decoration:none;font-weight:1000}.notice-card a{background:var(--pet-accent);color:#03101a}.notice-card button{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#fff}.delete-confirm-overlay{position:fixed;inset:0;display:grid;place-items:center;padding:20px;background:rgba(0,0,0,.72);z-index:160}.delete-confirm-card{width:min(460px,100%);padding:29px;text-align:center;border-radius:23px;border:1px solid rgba(255,255,255,.12);background:#0b151e;box-shadow:0 35px 100px rgba(0,0,0,.48)}.delete-confirm-card span{font-size:42px}.delete-confirm-card h3{font:700 30px Georgia,serif;margin:12px 0}.delete-confirm-card p{color:#9aafbb;line-height:1.55}.delete-confirm-card p b{color:#fff}.delete-confirm-card div{display:flex;justify-content:center;gap:10px;margin-top:22px}.delete-confirm-button{min-height:46px;padding:0 17px;border:0;border-radius:12px;background:#d94d61;color:#fff;font-weight:1000}.delete-confirm-button:disabled{opacity:.5}
+
+      .finance-shell{display:grid;gap:20px}.finance-heading h2{font:700 34px Georgia,serif;margin:6px 0}.finance-heading p{margin:0;color:#8da2af}.finance-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.finance-metrics article{padding:22px;border-radius:19px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035)}.finance-metrics span,.finance-metrics small{display:block;color:#8298a6}.finance-metrics strong{display:block;font:700 27px Georgia,serif;margin:10px 0;color:#fff}.invoice-panel{padding:22px;border-radius:22px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.025)}.invoice-table-head{display:flex;justify-content:space-between;align-items:center;padding-bottom:17px;border-bottom:1px solid rgba(255,255,255,.08)}.invoice-table-head strong{font-size:18px}.invoice-table-head span{color:#7f95a3}.invoice-list{display:grid}.invoice-row{display:grid;grid-template-columns:minmax(230px,1.5fr) .7fr .8fr auto;gap:18px;align-items:center;padding:19px 8px;border-bottom:1px solid rgba(255,255,255,.07)}.invoice-row:last-child{border-bottom:0}.invoice-main small{color:#83cbff;text-transform:capitalize;font-weight:900}.invoice-main h3{margin:5px 0;font-size:17px}.invoice-main p,.invoice-value span,.invoice-payment span,.invoice-payment small{margin:0;color:#8298a6;font-size:12px}.invoice-value strong,.invoice-payment strong{display:block;margin-top:5px}.invoice-actions{display:grid;justify-items:end;gap:9px}.invoice-actions a{padding:10px 13px;border-radius:10px;background:var(--pet-accent);color:#03101a;text-decoration:none;font-weight:1000;font-size:12px}.invoice-status{padding:6px 9px;border-radius:999px;font-style:normal;font-size:10px;font-weight:1000}.invoice-status.paid{background:rgba(70,220,145,.13);color:#8ff0bd}.invoice-status.pending{background:rgba(255,190,70,.13);color:#ffd185}.invoice-status.overdue{background:rgba(255,75,95,.13);color:#ff9baa}.invoice-status.cancelled{background:rgba(255,255,255,.08);color:#9aabb6}
       @media(max-width:1100px){
         .type-grid{grid-template-columns:repeat(2,1fr)}
         .review-grid{grid-template-columns:1fr}
@@ -1579,6 +1649,9 @@ function Style() {
         .dashboard-grid,.dashboard-grid.lower{grid-template-columns:1fr}
         .welcome-card{grid-template-columns:1fr}
         .welcome-visual{display:none}
+        .finance-metrics{grid-template-columns:repeat(2,1fr)}
+        .invoice-row{grid-template-columns:1fr 1fr}
+        .invoice-actions{justify-items:start}
       }
       @media(max-width:820px){
         .pets-app{display:block}
@@ -1612,6 +1685,8 @@ function Style() {
         .quick-grid{grid-template-columns:1fr}
         .package-numbers{grid-template-columns:1fr}
         .package-footer{display:grid}
+        .finance-metrics{grid-template-columns:1fr}
+        .invoice-row{grid-template-columns:1fr}
       }
 
       @media(max-width:760px){.settings-layout{grid-template-columns:1fr}.settings-tabs{grid-template-columns:repeat(5,1fr);overflow:auto}.settings-tabs button{justify-content:center;padding:0 10px}.settings-tabs b{display:none}.branding-settings-grid{grid-template-columns:1fr}.settings-form-grid,.plan-settings-grid{grid-template-columns:1fr}.settings-wide{grid-column:auto}.settings-heading{align-items:flex-start;flex-direction:column}.settings-heading button{width:100%}.team-grid{grid-template-columns:1fr}.team-toolbar{grid-template-columns:1fr}.team-summary{grid-template-columns:1fr}.team-form-grid,.permission-grid{grid-template-columns:1fr}.team-form-grid .team-notes{grid-column:auto}.team-card-actions{justify-content:flex-start;flex-wrap:wrap}.team-modal-actions,.team-password-card>div{flex-direction:column}.team-modal-actions button,.team-password-card>div button{width:100%}}
