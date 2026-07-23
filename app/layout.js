@@ -1,3 +1,4 @@
+import SupportWidget from "../components/support/SupportWidget";
 export const metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://eternizas.com.br'),
   title: {
@@ -49,7 +50,7 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body style={{ margin: 0, background: '#02070c' }}>{children}</body>
+      <body style={{ margin: 0, background: '#02070c' }}>{children}<SupportWidget /></body>
     </html>
   );
 }

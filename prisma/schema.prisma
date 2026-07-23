@@ -323,3 +323,59 @@ model ClinicInvoice {
   @@index([status, dueDate])
   @@index([clinicId, createdAt])
 }
+
+enum SupportTicketStatus {
+  NEW
+  IN_PROGRESS
+  WAITING_CLIENT
+  CLOSED
+}
+
+enum SupportSenderType {
+  CLIENT
+  ADMIN
+  SYSTEM
+}
+
+model SupportSequence {
+  key       String   @id
+  value     Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model SupportTicket {
+  id          String              @id @default(cuid())
+  code        String              @unique
+  accessToken String              @unique @default(cuid())
+  name        String
+  email       String?
+  phone       String?
+  subject     String
+  status      SupportTicketStatus @default(NEW)
+  sourceUrl   String?
+  tributeCode String?
+  lastMessage String?             @db.Text
+  lastMessageAt DateTime          @default(now())
+  clientUnread Int                @default(0)
+  adminUnread  Int                @default(1)
+  closedAt     DateTime?
+  closedById  String?
+  messages    SupportMessage[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([status, lastMessageAt])
+  @@index([createdAt])
+}
+
+model SupportMessage {
+  id         String            @id @default(cuid())
+  ticketId   String
+  ticket     SupportTicket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderType SupportSenderType
+  senderName String?
+  text       String            @db.Text
+  createdAt  DateTime          @default(now())
+
+  @@index([ticketId, createdAt])
+}

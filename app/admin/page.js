@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import SupportAdmin from "../../components/support/SupportAdmin";
 
 const menu = [
   ["dashboard", "▦", "Dashboard"],
@@ -11,6 +12,7 @@ const menu = [
   ["analytics", "⌁", "Analytics"],
   ["cupons", "◇", "Cupons"],
   ["pets", "🐾", "Eterniza Pets"],
+  ["atendimentos", "💬", "Atendimentos"],
   ["pets-finance", "R$", "Financeiro Pets"],
   ["configuracoes", "⚙", "Configurações"],
 ];
@@ -479,6 +481,10 @@ export default function AdminPage() {
             updateClinic={updatePetClinic}
             saving={savingClinic}
           />
+        )}
+
+        {active === "atendimentos" && (
+          <SupportAdmin />
         )}
 
         {active === "pets-finance" && (
