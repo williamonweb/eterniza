@@ -13,7 +13,12 @@ export default function SupportWidget(){
  useEffect(()=>{const saved=localStorage.getItem(KEY)||"";setToken(saved)},[]);
  async function load(t=token){if(!t)return;const r=await fetch(`/api/support/tickets/${t}`,{cache:"no-store"});const j=await r.json();if(j.ok)setTicket(j.ticket);else if(r.status===404){localStorage.removeItem(KEY);setToken("")}}
  useEffect(()=>{if(open&&token)load(token);const id=open&&token?setInterval(()=>load(token),5000):null;return()=>id&&clearInterval(id)},[open,token]);
- useEffect(()=>end.current?.scrollIntoView({behavior:"smooth"}),[ticket?.messages?.length,open]);
+ useEffect(()=>{
+  const node=end.current;
+  if(node && typeof node.scrollIntoView==="function"){
+    try{node.scrollIntoView({behavior:"smooth",block:"end"})}catch{node.scrollIntoView()}
+  }
+ },[ticket?.messages?.length,open]);
  if(pathname?.startsWith("/admin"))return null;
  async function create(e){e.preventDefault();setBusy(true);const r=await fetch("/api/support/tickets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...form,sourceUrl:location.href})});const j=await r.json();setBusy(false);if(j.ok){localStorage.setItem(KEY,j.accessToken);setToken(j.accessToken);setTicket(j.ticket)}else alert(j.message)}
  async function send(e){e.preventDefault();if(!text.trim())return;setBusy(true);const r=await fetch(`/api/support/tickets/${token}/messages`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})});const j=await r.json();setBusy(false);if(j.ok){setText("");load()}else alert(j.message)}

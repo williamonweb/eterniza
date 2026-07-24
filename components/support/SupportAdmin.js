@@ -12,7 +12,12 @@ export default function SupportAdmin(){
  async function openTicket(id){const r=await fetch(`/api/admin/support/tickets/${id}`,{cache:"no-store"});const j=await r.json();if(j.ok){setSelected(j.ticket);loadList()}}
  useEffect(()=>{loadList();const id=setInterval(loadList,6000);return()=>clearInterval(id)},[filter]);
  useEffect(()=>{if(!selected)return;const id=setInterval(()=>openTicket(selected.id),5000);return()=>clearInterval(id)},[selected?.id]);
- useEffect(()=>end.current?.scrollIntoView({behavior:"smooth"}),[selected?.messages?.length]);
+ useEffect(()=>{
+  const node=end.current;
+  if(node && typeof node.scrollIntoView==="function"){
+    try{node.scrollIntoView({behavior:"smooth",block:"end"})}catch{node.scrollIntoView()}
+  }
+ },[selected?.messages?.length]);
  const visible=useMemo(()=>tickets.filter(t=>`${t.code} ${t.name} ${t.subject} ${t.email||""} ${t.phone||""}`.toLowerCase().includes(query.toLowerCase())),[tickets,query]);
  async function send(e){e.preventDefault();if(!text.trim()||!selected)return;setBusy(true);const r=await fetch(`/api/admin/support/tickets/${selected.id}/messages`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})});const j=await r.json();setBusy(false);if(j.ok){setText("");openTicket(selected.id)}else alert(j.message)}
  async function changeStatus(status){if(!selected)return;setBusy(true);const r=await fetch(`/api/admin/support/tickets/${selected.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});const j=await r.json();setBusy(false);setConfirmClose(false);if(j.ok){await openTicket(selected.id);loadList()}else alert(j.message)}
