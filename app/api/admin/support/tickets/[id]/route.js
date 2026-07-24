@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../../../lib/prisma";
 import { getCurrentUser } from "../../../../../../lib/auth";
+import { hasAdminPermission } from "../../../../../../lib/adminPermissions";
 
-async function admin(){ const user=await getCurrentUser(); return user?.role==="ADMIN"?user:null; }
+async function admin(){ const user=await getCurrentUser(); return hasAdminPermission(user, "support")?user:null; }
 export async function GET(_request,{params}){
   if(!await admin()) return NextResponse.json({ok:false,message:"Acesso negado."},{status:403});
   const ticket=await prisma.supportTicket.findUnique({where:{id:params.id},include:{messages:{orderBy:{createdAt:"asc"}}}});

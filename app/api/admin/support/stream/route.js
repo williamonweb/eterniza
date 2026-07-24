@@ -1,5 +1,6 @@
 import { prisma } from "../../../../../lib/prisma";
 import { getCurrentUser } from "../../../../../lib/auth";
+import { hasAdminPermission } from "../../../../../lib/adminPermissions";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -9,7 +10,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function GET(request) {
   const user = await getCurrentUser();
-  if (!user || user.role !== "ADMIN") return new Response("Acesso negado", { status: 403 });
+  if (!user || !hasAdminPermission(user, "support")) return new Response("Acesso negado", { status: 403 });
 
   const url = new URL(request.url);
   const status = url.searchParams.get("status") || "ALL";

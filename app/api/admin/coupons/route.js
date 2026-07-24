@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { getCurrentUser } from "../../../../lib/auth";
+import { hasAdminPermission } from "../../../../lib/adminPermissions";
 
 function normalizeCode(value) {
   return String(value || "").trim().toUpperCase().replace(/\s+/g, "");
@@ -24,7 +25,7 @@ async function requireAdmin() {
     };
   }
 
-  if (String(user.role).toUpperCase() !== "ADMIN") {
+  if (!hasAdminPermission(user, "coupons")) {
     return {
       error: NextResponse.json(
         { ok: false, message: "Acesso negado." },

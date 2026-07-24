@@ -2,11 +2,9 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "../../../../lib/prisma";
 import { getCurrentUser } from "../../../../lib/auth";
+import { getAdminLevel, getAdminPermissions, normalizeAdminModules } from "../../../../lib/adminPermissions";
 
-function adminLevel(user) {
-  if (!user || user.role !== "ADMIN") return null;
-  return String(user.permissions?.adminLevel || "SUPER_ADMIN").toUpperCase();
-}
+function adminLevel(user) { return getAdminLevel(user); }
 
 async function requireSuperAdmin() {
   const user = await getCurrentUser();
@@ -21,6 +19,7 @@ function serialize(user) {
     phone: user.phone || "",
     isActive: user.isActive !== false,
     adminLevel: adminLevel(user) || "ADMIN",
+    modules: getAdminPermissions(user),
     lastLoginAt: user.lastLoginAt,
     createdAt: user.createdAt,
   };
@@ -73,7 +72,7 @@ export async function POST(request) {
       password: await bcrypt.hash(password, 12),
       role: "ADMIN",
       isActive: true,
-      permissions: { adminLevel: level },
+      permissions: { adminLevel: level, modules: normalizeAdminModules(level, body.modules) },
     },
     select: {
       id: true, name: true, email: true, phone: true, role: true,
@@ -99,7 +98,11 @@ export async function PATCH(request) {
   if (body.adminLevel !== undefined) {
     const level = String(body.adminLevel).toUpperCase();
     if (!["SUPER_ADMIN", "ADMIN", "ATTENDANT"].includes(level)) return NextResponse.json({ ok: false, message: "Perfil inválido." }, { status: 400 });
-    data.permissions = { ...(target.permissions || {}), adminLevel: level };
+    data.permissions = { ...(target.permissions || {}), adminLevel: level, modules: normalizeAdminModules(level, body.modules ?? target.permissions?.modules) };
+  }
+  if (body.modules !== undefined && body.adminLevel === undefined) {
+    const level = adminLevel(target) || "ADMIN";
+    data.permissions = { ...(target.permissions || {}), adminLevel: level, modules: normalizeAdminModules(level, body.modules) };
   }
   if (body.isActive !== undefined) {
     if (target.id === admin.id && body.isActive === false) return NextResponse.json({ ok: false, message: "Você não pode bloquear seu próprio acesso." }, { status: 400 });

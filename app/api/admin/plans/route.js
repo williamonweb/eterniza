@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { getCurrentUser } from "../../../../lib/auth";
 import { ensureDefaultPlans, getPlans } from "../../../../lib/asaas";
+import { hasAdminPermission } from "../../../../lib/adminPermissions";
 
 function toCents(value) {
   if (value === undefined || value === null || value === "") return null;
@@ -32,7 +33,7 @@ async function requireAdmin() {
     };
   }
 
-  if (String(user.role).toUpperCase() !== "ADMIN") {
+  if (!hasAdminPermission(user, "plans")) {
     return {
       error: NextResponse.json(
         { ok: false, message: "Acesso negado." },

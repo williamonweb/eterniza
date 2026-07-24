@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/prisma";
+import { hasAdminPermission } from "../../../../lib/adminPermissions";
 
 async function handler() {
   try {
     const user = await getCurrentUser();
-    if (!user || user.role !== "ADMIN") {
+    if (!user || !hasAdminPermission(user, "analytics")) {
       return NextResponse.json({ ok: false }, { status: 403 });
     }
 

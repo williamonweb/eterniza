@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { getCurrentUser } from "../../../../lib/auth";
+import { hasAnyAdminPermission } from "../../../../lib/adminPermissions";
 
 async function requireAdmin() {
   const user = await getCurrentUser();
@@ -14,7 +15,7 @@ async function requireAdmin() {
     };
   }
 
-  if (String(user.role).toUpperCase() !== "ADMIN") {
+  if (!hasAnyAdminPermission(user, ["dashboard", "tributes", "clients", "payments", "analytics"])) {
     return {
       error: NextResponse.json(
         { ok: false, message: "Acesso negado." },

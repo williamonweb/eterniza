@@ -5,6 +5,7 @@ import {
   DEFAULT_SYSTEM_SETTINGS,
   SETTINGS_GROUPS,
 } from "../../settings/defaults";
+import { hasAdminPermission } from "../../../../lib/adminPermissions";
 
 async function requireAdmin() {
   const user = await getCurrentUser();
@@ -18,7 +19,7 @@ async function requireAdmin() {
     };
   }
 
-  if (String(user.role).toUpperCase() !== "ADMIN") {
+  if (!hasAdminPermission(user, "settings")) {
     return {
       error: NextResponse.json(
         { ok: false, message: "Acesso negado." },

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../../../../lib/prisma";
 import { getCurrentUser } from "../../../../../../../lib/auth";
+import { hasAdminPermission } from "../../../../../../../lib/adminPermissions";
 export async function POST(request,{params}){
   const user=await getCurrentUser();
-  if(!user||user.role!=="ADMIN") return NextResponse.json({ok:false,message:"Acesso negado."},{status:403});
+  if(!user||!hasAdminPermission(user, "support")) return NextResponse.json({ok:false,message:"Acesso negado."},{status:403});
   const ticket=await prisma.supportTicket.findUnique({where:{id:params.id}});
   if(!ticket) return NextResponse.json({ok:false,message:"Chamado não encontrado."},{status:404});
   if(ticket.status==="CLOSED") return NextResponse.json({ok:false,message:"Reabra o chamado antes de responder."},{status:409});

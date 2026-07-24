@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import SupportAdmin from "../../components/support/SupportAdmin";
 import AdminUsers from "../../components/admin/AdminUsers";
+import { getAdminPermissions } from "../../lib/adminPermissions";
 
 const menu = [
   ["dashboard", "▦", "Dashboard"],
@@ -18,6 +19,17 @@ const menu = [
   ["pets-finance", "R$", "Financeiro Pets"],
   ["configuracoes", "⚙", "Configurações"],
 ];
+
+const MENU_PERMISSION = {
+  dashboard: "dashboard", homenagens: "tributes", clientes: "clients",
+  pagamentos: "payments", planos: "plans", analytics: "analytics",
+  cupons: "coupons", pets: "pets", atendimentos: "support",
+  "usuarios-painel": "staff", "pets-finance": "petsFinance", configuracoes: "settings",
+};
+
+function canOpenMenu(id, permissions) {
+  return Boolean(permissions?.[MENU_PERMISSION[id]]);
+}
 
 function money(value) {
   return Number(value || 0).toLocaleString("pt-BR", {
@@ -84,26 +96,28 @@ export default function AdminPage() {
 
       setAuthorized(true);
       setCurrentAdmin(me.user);
-      const adminLevel = String(me.user?.permissions?.adminLevel || "SUPER_ADMIN").toUpperCase();
-      if (adminLevel === "ATTENDANT") {
-        setActive("atendimentos");
+      const permissions = getAdminPermissions(me.user);
+      const allowedMenu = menu.filter(([id]) => canOpenMenu(id, permissions));
+      if (!allowedMenu.length) {
         setData({ admin: me.user, metrics: {}, tributes: [], clients: [], payments: [] });
         return;
       }
+      if (!canOpenMenu(active, permissions)) setActive(allowedMenu[0][0]);
 
+      const needsDashboardData = permissions.dashboard || permissions.tributes || permissions.clients || permissions.payments || permissions.analytics;
       const [dashboardRes, plansRes, couponsRes, settingsRes, petsRes, financeRes] = await Promise.all([
-        fetch("/api/admin/dashboard", { cache: "no-store" }),
-        fetch("/api/admin/plans", { cache: "no-store" }),
-        fetch("/api/admin/coupons", { cache: "no-store" }),
-        fetch("/api/admin/settings", { cache: "no-store" }),
-        fetch("/api/admin/pets/clinics", { cache: "no-store" }).catch(() => null),
-        fetch("/api/admin/pets/finance", { cache: "no-store" }).catch(() => null),
+        needsDashboardData ? fetch("/api/admin/dashboard", { cache: "no-store" }) : Promise.resolve(null),
+        permissions.plans ? fetch("/api/admin/plans", { cache: "no-store" }) : Promise.resolve(null),
+        permissions.coupons ? fetch("/api/admin/coupons", { cache: "no-store" }) : Promise.resolve(null),
+        permissions.settings ? fetch("/api/admin/settings", { cache: "no-store" }) : Promise.resolve(null),
+        permissions.pets ? fetch("/api/admin/pets/clinics", { cache: "no-store" }).catch(() => null) : Promise.resolve(null),
+        permissions.petsFinance ? fetch("/api/admin/pets/finance", { cache: "no-store" }).catch(() => null) : Promise.resolve(null),
       ]);
 
-      const dashboardData = await dashboardRes.json().catch(() => ({}));
-      const plansData = await plansRes.json().catch(() => ({}));
-      const couponsData = await couponsRes.json().catch(() => ({}));
-      const settingsData = await settingsRes.json().catch(() => ({}));
+      const dashboardData = dashboardRes ? await dashboardRes.json().catch(() => ({})) : {};
+      const plansData = plansRes ? await plansRes.json().catch(() => ({})) : {};
+      const couponsData = couponsRes ? await couponsRes.json().catch(() => ({})) : {};
+      const settingsData = settingsRes ? await settingsRes.json().catch(() => ({})) : {};
       const petsData = petsRes ? await petsRes.json().catch(() => ({})) : {};
       const financeData = financeRes ? await financeRes.json().catch(() => ({})) : {};
 
@@ -393,12 +407,7 @@ export default function AdminPage() {
         </a>
 
         <nav>
-          {menu.filter(([id]) => {
-            const level = String(currentAdmin?.permissions?.adminLevel || "SUPER_ADMIN").toUpperCase();
-            if (level === "ATTENDANT") return id === "atendimentos";
-            if (id === "usuarios-painel") return level === "SUPER_ADMIN";
-            return true;
-          }).map(([id, icon, label, soon]) => (
+          {menu.filter(([id]) => canOpenMenu(id, getAdminPermissions(currentAdmin))).map(([id, icon, label, soon]) => (
             <button
               key={id}
               className={active === id ? "active" : ""}

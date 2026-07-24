@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../../lib/prisma";
 import { getCurrentUser } from "../../../../../lib/auth";
+import { hasAdminPermission } from "../../../../../lib/adminPermissions";
 
 async function requireAdmin() {
   const user = await getCurrentUser();
-  if (!user || String(user.role).toUpperCase() !== "ADMIN") return null;
+  if (!user || !hasAdminPermission(user, "petsFinance")) return null;
   return user;
 }
 
