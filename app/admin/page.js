@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import SupportAdmin from "../../components/support/SupportAdmin";
+import AdminUsers from "../../components/admin/AdminUsers";
 
 const menu = [
   ["dashboard", "▦", "Dashboard"],
@@ -13,6 +14,7 @@ const menu = [
   ["cupons", "◇", "Cupons"],
   ["pets", "🐾", "Eterniza Pets"],
   ["atendimentos", "💬", "Atendimentos"],
+  ["usuarios-painel", "👥", "Usuários do painel"],
   ["pets-finance", "R$", "Financeiro Pets"],
   ["configuracoes", "⚙", "Configurações"],
 ];
@@ -44,6 +46,7 @@ export default function AdminPage() {
   const [mounted, setMounted] = useState(false);
   const [booting, setBooting] = useState(true);
   const [authorized, setAuthorized] = useState(false);
+  const [currentAdmin, setCurrentAdmin] = useState(null);
   const [active, setActive] = useState("dashboard");
   const [data, setData] = useState(null);
   const [plans, setPlans] = useState([]);
@@ -79,6 +82,13 @@ export default function AdminPage() {
       }
 
       setAuthorized(true);
+      setCurrentAdmin(me.user);
+      const adminLevel = String(me.user?.permissions?.adminLevel || "SUPER_ADMIN").toUpperCase();
+      if (adminLevel === "ATTENDANT") {
+        setActive("atendimentos");
+        setData({ admin: me.user, metrics: {}, tributes: [], clients: [], payments: [] });
+        return;
+      }
 
       const [dashboardRes, plansRes, couponsRes, settingsRes, petsRes, financeRes] = await Promise.all([
         fetch("/api/admin/dashboard", { cache: "no-store" }),
@@ -382,7 +392,12 @@ export default function AdminPage() {
         </a>
 
         <nav>
-          {menu.map(([id, icon, label, soon]) => (
+          {menu.filter(([id]) => {
+            const level = String(currentAdmin?.permissions?.adminLevel || "SUPER_ADMIN").toUpperCase();
+            if (level === "ATTENDANT") return id === "atendimentos";
+            if (id === "usuarios-painel") return level === "SUPER_ADMIN";
+            return true;
+          }).map(([id, icon, label, soon]) => (
             <button
               key={id}
               className={active === id ? "active" : ""}
@@ -485,6 +500,10 @@ export default function AdminPage() {
 
         {active === "atendimentos" && (
           <SupportAdmin />
+        )}
+
+        {active === "usuarios-painel" && (
+          <AdminUsers currentAdmin={currentAdmin} />
         )}
 
         {active === "pets-finance" && (

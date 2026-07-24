@@ -23,6 +23,10 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, message: "Senha incorreta." }, { status: 401 });
     }
 
+    if (user.isActive === false) {
+      return NextResponse.json({ ok: false, message: "Este acesso está bloqueado. Fale com o administrador." }, { status: 403 });
+    }
+
     if (["CLINIC_MANAGER", "CLINIC_STAFF"].includes(String(user.role || "").toUpperCase())) {
       return NextResponse.json(
         {
@@ -34,8 +38,9 @@ export async function POST(req) {
       );
     }
 
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     await setSessionCookie(user);
-    return NextResponse.json({ ok: true, user: publicUser(user) });
+    return NextResponse.json({ ok: true, user: publicUser({ ...user, lastLoginAt: new Date() }) });
   } catch (err) {
     return NextResponse.json({ ok: false, message: err.message || "Erro ao entrar." }, { status: 500 });
   }
