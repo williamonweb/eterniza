@@ -66,6 +66,7 @@ export default function AdminPage() {
   const [financeEditor, setFinanceEditor] = useState(null);
   const [paymentEditor, setPaymentEditor] = useState(null);
   const [savingFinance, setSavingFinance] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   async function load() {
     try {
@@ -418,13 +419,42 @@ export default function AdminPage() {
 
       <section className="workspace">
         <header className="topbar">
-          <div>
-            <span className="eyebrow">Eterniza Business</span>
+          <div className="topbar-title">
+            <span className="eyebrow">Eterniza Control Center</span>
             <h1>{sectionTitle(active)}</h1>
           </div>
-          <div className="admin-user">
-            <div className="avatar">{(data?.admin?.name || "A").slice(0, 1)}</div>
-            <div><strong>{data?.admin?.name || "Administrador"}</strong><span>Online agora</span></div>
+          <div className="topbar-actions">
+            <label className="global-search">
+              <span>⌕</span>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Buscar no painel..."
+              />
+            </label>
+            <div className="notification-wrap">
+              <button className="notification-button" onClick={() => setNotificationsOpen((value) => !value)} aria-label="Notificações">
+                <span>♢</span>
+                {(Number(metrics.pendingPayments || 0) + Number(metrics.openTickets || 0)) > 0 && (
+                  <b>{Math.min(99, Number(metrics.pendingPayments || 0) + Number(metrics.openTickets || 0))}</b>
+                )}
+              </button>
+              {notificationsOpen && (
+                <div className="notification-popover">
+                  <div className="notification-head"><strong>Notificações</strong><small>Atualizadas agora</small></div>
+                  <button onClick={() => { setActive("atendimentos"); setNotificationsOpen(false); }}>
+                    <i className="notice-dot support"></i><span><b>{metrics.openTickets || 0} chamados em aberto</b><small>Acompanhar fila de atendimento</small></span>
+                  </button>
+                  <button onClick={() => { setActive("pagamentos"); setNotificationsOpen(false); }}>
+                    <i className="notice-dot payment"></i><span><b>{metrics.pendingPayments || 0} pagamentos pendentes</b><small>Verificar cobranças em andamento</small></span>
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="admin-user">
+              <div className="avatar">{(data?.admin?.name || "A").slice(0, 1)}</div>
+              <div><strong>{data?.admin?.name || "Administrador"}</strong><span>Online agora</span></div>
+            </div>
           </div>
         </header>
 
@@ -549,45 +579,36 @@ export default function AdminPage() {
 function Dashboard({ data, metrics, setActive }) {
   const chart = data?.chart || [];
   const maxChart = Math.max(...chart.map((item) => Number(item.value || 0)), 1);
+  const firstName = data?.admin?.name?.split(" ")?.[0] || "Administrador";
 
   return (
-    <div className="dashboard-stack">
-      <section className="welcome">
+    <div className="dashboard-stack control-dashboard">
+      <section className="control-hero">
         <div>
-          <span className="eyebrow">Visão geral do negócio</span>
-          <h2>Bom dia, {data?.admin?.name?.split(" ")?.[0] || "Administrador"}.</h2>
-          <p>Acompanhe vendas, clientes, pagamentos e campanhas em um só lugar.</p>
+          <span className="eyebrow">Visão executiva</span>
+          <h2>Olá, {firstName}. <em>Seu negócio em um só lugar.</em></h2>
+          <p>Dados atualizados da operação Eterniza, pagamentos, clientes, Pets e atendimento.</p>
         </div>
-
-        <div className={`first-sale ${data?.firstSale ? "completed" : ""}`}>
-          <span>{data?.firstSale ? "Primeira venda realizada" : "Primeira venda"}</span>
-          {data?.firstSale ? (
-            <>
-              <strong>{money(data.firstSale.amount)}</strong>
-              <small>{data.firstSale.client} • {data.firstSale.plan}</small>
-              <em>{date(data.firstSale.date, true)}</em>
-            </>
-          ) : (
-            <>
-              <strong>Aguardando...</strong>
-              <small>O início oficial da história do Eterniza.</small>
-            </>
-          )}
+        <div className="hero-actions">
+          <button onClick={() => setActive("homenagens")}>Ver homenagens</button>
+          <button className="primary" onClick={() => setActive("analytics")}>Abrir Analytics</button>
         </div>
       </section>
 
-      <section className="metric-grid">
-        <Metric icon="R$" value={money(metrics.revenueToday)} label="Receita hoje" detail="Pagamentos aprovados" />
-        <Metric icon="↗" value={money(metrics.revenueMonth)} label="Receita do mês" detail="Mês atual" />
-        <Metric icon="Σ" value={money(metrics.revenueTotal)} label="Receita total" detail={`Ticket médio ${money(metrics.averageTicket)}`} />
-        <Metric icon="◉" value={metrics.clients || 0} label="Clientes" detail={`${metrics.clientsLast7Days || 0} nos últimos 7 dias`} />
+      <section className="executive-grid">
+        <ExecutiveMetric tone="gold" icon="R$" value={money(metrics.revenueMonth)} label="Receita do mês" detail={`${metrics.approvedPayments || 0} pagamentos aprovados`} />
+        <ExecutiveMetric tone="blue" icon="◉" value={metrics.clients || 0} label="Clientes cadastrados" detail={`+${metrics.clientsLast7Days || 0} nos últimos 7 dias`} />
+        <ExecutiveMetric tone="rose" icon="♥" value={metrics.published || 0} label="Homenagens publicadas" detail={`${metrics.drafts || 0} rascunhos em andamento`} />
+        <ExecutiveMetric tone="green" icon="◎" value={Number(metrics.totalViews || 0).toLocaleString("pt-BR")} label="Visualizações" detail={`${Number(metrics.conversion || 0).toFixed(1)}% de conversão`} />
+        <ExecutiveMetric tone="violet" icon="🐾" value={metrics.clinics || 0} label="Clínicas Pets" detail="Parceiros cadastrados" />
+        <ExecutiveMetric tone="cyan" icon="💬" value={metrics.openTickets || 0} label="Chamados abertos" detail="Central de atendimento" />
       </section>
 
-      <section className="business-grid">
-        <article className="panel chart-panel">
+      <section className="control-main-grid">
+        <article className="panel chart-panel control-chart">
           <div className="panel-heading">
-            <div><span className="eyebrow">Financeiro</span><h3>Receita dos últimos 30 dias</h3></div>
-            <strong>{money(metrics.revenueMonth)}</strong>
+            <div><span className="eyebrow">Performance financeira</span><h3>Receita dos últimos 30 dias</h3><p>Movimentação diária de pagamentos aprovados.</p></div>
+            <div className="chart-total"><small>Total no mês</small><strong>{money(metrics.revenueMonth)}</strong></div>
           </div>
           <div className="revenue-chart">
             {chart.map((item) => (
@@ -597,46 +618,51 @@ function Dashboard({ data, metrics, setActive }) {
               </div>
             ))}
           </div>
+          <div className="chart-footer"><span><i></i> Receita aprovada</span><b>Ticket médio: {money(metrics.averageTicket)}</b></div>
         </article>
 
-        <article className="panel indicators">
-          <div className="panel-heading"><div><span className="eyebrow">Indicadores</span><h3>Saúde do negócio</h3></div></div>
+        <article className="panel executive-health">
+          <div className="panel-heading"><div><span className="eyebrow">Saúde do negócio</span><h3>Indicadores-chave</h3></div></div>
+          <Indicator label="Receita total" value={money(metrics.revenueTotal)} />
           <Indicator label="Plano mais vendido" value={metrics.bestPlan || "—"} />
-          <Indicator label="Conversão em publicação" value={`${Number(metrics.conversion || 0).toFixed(1)}%`} />
+          <Indicator label="Clientes ativos" value={metrics.activeClients || 0} />
           <Indicator label="PIX aprovados" value={metrics.approvedPayments || 0} />
           <Indicator label="PIX pendentes" value={metrics.pendingPayments || 0} />
-          <Indicator label="Visualizações" value={Number(metrics.totalViews || 0).toLocaleString("pt-BR")} />
+          <div className="health-progress"><div><span>Publicação de homenagens</span><b>{Number(metrics.conversion || 0).toFixed(1)}%</b></div><i><em style={{width:`${Math.min(100, Number(metrics.conversion || 0))}%`}}></em></i></div>
         </article>
       </section>
 
-      <section className="metric-grid compact">
-        <Metric icon="♥" value={metrics.published || 0} label="Publicadas" detail="Homenagens no ar" />
-        <Metric icon="✎" value={metrics.drafts || 0} label="Rascunhos" detail="Em construção" />
-        <Metric icon="◆" value={metrics.tributes || 0} label="Total de homenagens" detail="Todas as etapas" />
-        <Metric icon="◎" value={metrics.activeClients || 0} label="Clientes ativos" detail="Com homenagem criada" />
-      </section>
-
-      <section className="business-grid">
-        <article className="panel">
-          <div className="panel-heading">
-            <div><span className="eyebrow">Movimentação</span><h3>Últimos pagamentos</h3></div>
-            <button className="link-button" onClick={() => setActive("pagamentos")}>Ver todos</button>
-          </div>
-          <PaymentsTable items={data?.recentPayments || []} compact />
-        </article>
-
+      <section className="control-bottom-grid">
         <article className="panel activity-panel">
-          <div className="panel-heading"><div><span className="eyebrow">Tempo real</span><h3>Atividade recente</h3></div></div>
-          {(data?.activity || []).map((item, index) => (
+          <div className="panel-heading"><div><span className="eyebrow">Operação</span><h3>Atividade recente</h3></div><button className="link-button" onClick={() => setActive("analytics")}>Ver detalhes</button></div>
+          {(data?.activity || []).slice(0, 7).map((item, index) => (
             <div className="activity" key={`${item.type}-${index}`}>
               <span className={`activity-icon ${item.type}`}>{item.type === "payment" ? "R$" : item.type === "client" ? "◉" : "♥"}</span>
               <div><strong>{item.title}</strong><small>{item.detail}</small></div>
               <time>{date(item.date, true)}</time>
             </div>
           ))}
+          {!(data?.activity || []).length && <p className="empty-state">As novas atividades aparecerão aqui.</p>}
+        </article>
+
+        <article className="panel quick-actions">
+          <div className="panel-heading"><div><span className="eyebrow">Acesso rápido</span><h3>Gerenciar</h3></div></div>
+          <button onClick={() => setActive("homenagens")}><span>♥</span><div><b>Homenagens</b><small>Publicadas e rascunhos</small></div><em>›</em></button>
+          <button onClick={() => setActive("clientes")}><span>◉</span><div><b>Clientes</b><small>Cadastros e histórico</small></div><em>›</em></button>
+          <button onClick={() => setActive("atendimentos")}><span>💬</span><div><b>Atendimento</b><small>{metrics.openTickets || 0} chamados abertos</small></div><em>›</em></button>
+          <button onClick={() => setActive("pets-finance")}><span>R$</span><div><b>Financeiro Pets</b><small>Faturas e recebimentos</small></div><em>›</em></button>
         </article>
       </section>
     </div>
+  );
+}
+
+function ExecutiveMetric({ tone, icon, value, label, detail }) {
+  return (
+    <article className={`executive-metric ${tone}`}>
+      <div className="executive-icon">{icon}</div>
+      <div className="executive-copy"><span>{label}</span><strong>{value}</strong><small>{detail}</small></div>
+    </article>
   );
 }
 
@@ -1655,9 +1681,15 @@ function Style() {
 .setting-toggle{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;border:1px solid rgba(255,255,255,.06);border-radius:13px;padding:12px}.setting-toggle span{font-weight:900;color:#ddd3c0}.setting-toggle input{display:none}.setting-toggle i{width:42px;height:24px;border-radius:999px;background:#2d322f;position:relative}.setting-toggle i:after{content:"";position:absolute;width:18px;height:18px;border-radius:50%;background:#999;top:3px;left:3px;transition:.2s}.setting-toggle input:checked+i{background:#8d6c29}.setting-toggle input:checked+i:after{left:21px;background:#ffe094}
 .goal-preview{display:grid;gap:12px}.goal-preview div:not(.goal-track){display:flex;justify-content:space-between;gap:12px;color:#aaa194}.goal-preview strong{color:#fff3d5}.goal-track{height:13px;border-radius:999px;background:#1e2522;overflow:hidden}.goal-track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#c99337,#f7dc82)}.goal-preview b{color:#efbd52}.pets-admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}.pet-clinic-card{padding:22px;border-radius:20px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035)}.pet-clinic-head{display:flex;justify-content:space-between;gap:15px}.pet-clinic-head h3{margin:5px 0}.pet-clinic-head small,.pet-clinic-head span{color:#9da7b5}.pet-clinic-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0}.pet-clinic-meta span,.clinic-detail-grid span{color:#8f99a8;font-size:12px}.pet-clinic-meta b,.clinic-detail-grid b{display:block;color:#fff;margin-top:4px}.pet-clinic-actions{display:flex;gap:8px;flex-wrap:wrap}.pet-clinic-actions button{min-height:40px;padding:0 13px;border-radius:10px}.rejection{color:#ffb1ba}.pet-modal{width:min(820px,94vw);max-height:92vh;overflow:auto;background:#0c1118;border:1px solid rgba(255,255,255,.12);border-radius:22px;padding:24px}.clinic-detail-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px;border-radius:14px;background:rgba(255,255,255,.035);margin-bottom:18px}.integration-status{display:grid;gap:12px}.integration-status p{margin:0;color:#aaa194;line-height:1.55}
 .finance-table{padding:8px 20px}.finance-row{display:grid;grid-template-columns:1.25fr .7fr .75fr .7fr .65fr 1fr 1.2fr;gap:12px;align-items:center;padding:14px 4px;border-top:1px solid rgba(255,255,255,.065);min-width:1050px}.finance-row.header{border-top:0;color:#847e75;text-transform:uppercase;font-size:10px;font-weight:1000}.finance-row b,.finance-row small{display:block}.finance-row small{color:#8f887e;margin-top:4px}.finance-actions{display:flex;gap:6px;flex-wrap:wrap}.finance-actions button,.finance-actions a{border:1px solid rgba(239,189,82,.16);background:rgba(255,255,255,.04);color:#fff;border-radius:9px;padding:8px 10px;font-size:11px;font-weight:900;text-decoration:none;cursor:pointer}.finance-actions .confirm{color:#8dffb2;border-color:rgba(69,194,113,.25)}.finance-modal{width:min(760px,94vw);max-height:92vh;overflow:auto;background:#0c1110;border:1px solid rgba(239,189,82,.2);border-radius:22px;padding:24px}.finance-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.finance-form-grid label{display:grid;gap:7px;color:#d8c9a9;font-size:12px;font-weight:900}.finance-form-grid label.wide{grid-column:1/-1}.finance-form-grid input,.finance-form-grid select,.finance-form-grid textarea{width:100%;border:1px solid rgba(239,189,82,.15);background:#101513;color:#fff;border-radius:11px;padding:12px;font:inherit}.finance-form-grid textarea{min-height:90px;resize:vertical}.payment-modal{width:min(680px,94vw);max-height:92vh;overflow:auto;background:#0c1110;border:1px solid rgba(239,189,82,.24);border-radius:22px;padding:24px}.payment-summary{display:grid;grid-template-columns:1.3fr .8fr .8fr;gap:10px;margin:4px 0 20px}.payment-summary div{padding:14px;border-radius:13px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)}.payment-summary span{display:block;color:#8f887e;font-size:10px;text-transform:uppercase;font-weight:900;letter-spacing:.06em}.payment-summary b,.payment-summary strong{display:block;margin-top:7px;color:#fff}.payment-summary strong{color:#8dffb2;font-size:18px}.payment-methods{border:0;padding:0;margin:0 0 18px}.payment-methods legend{color:#d8c9a9;font-size:12px;font-weight:900;margin-bottom:10px}.payment-methods{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.payment-methods legend{grid-column:1/-1}.payment-methods label{display:flex;align-items:center;gap:10px;padding:12px 13px;border-radius:11px;border:1px solid rgba(239,189,82,.13);background:rgba(255,255,255,.03);cursor:pointer;color:#c8c1b5;font-weight:800}.payment-methods label.selected{border-color:rgba(69,194,113,.5);background:rgba(69,194,113,.09);color:#dfffe9}.payment-methods input{accent-color:#45c271}.payment-fields{margin-top:4px}@media(max-width:650px){.payment-summary{grid-template-columns:1fr}.payment-methods{grid-template-columns:1fr}}
+
+/* Control Center v7.2 */
+.topbar{position:relative}.topbar-actions{display:flex;align-items:center;gap:12px}.topbar-title h1{letter-spacing:-.02em}.global-search{width:260px;height:44px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035);border-radius:14px;display:flex;align-items:center;gap:9px;padding:0 13px;color:#7e887f}.global-search input{min-width:0;width:100%;border:0;outline:0;background:transparent;color:#fff}.global-search input::placeholder{color:#737a75}.notification-wrap{position:relative}.notification-button{width:44px;height:44px;border-radius:14px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.04);color:#f4d27a;display:grid;place-items:center;cursor:pointer;position:relative;font-size:20px}.notification-button b{position:absolute;right:-5px;top:-5px;min-width:20px;height:20px;border-radius:99px;background:#ef6d6d;color:#fff;font-size:10px;display:grid;place-items:center;border:2px solid #080d0b}.notification-popover{position:absolute;right:0;top:54px;width:330px;padding:12px;background:#0d1411;border:1px solid rgba(239,189,82,.18);border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.5);z-index:20}.notification-head{display:flex;justify-content:space-between;padding:7px 8px 12px}.notification-head small{color:#7f8982}.notification-popover>button{width:100%;border:0;border-top:1px solid rgba(255,255,255,.06);background:transparent;color:#fff;padding:13px 8px;display:grid;grid-template-columns:10px 1fr;gap:12px;text-align:left;cursor:pointer}.notification-popover button span b,.notification-popover button span small{display:block}.notification-popover button span small{color:#89928c;margin-top:4px}.notice-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;background:#efbd52}.notice-dot.support{background:#60a5fa}.notice-dot.payment{background:#f1c75b}
+.control-dashboard{gap:16px}.control-hero{border:1px solid rgba(239,189,82,.14);background:radial-gradient(circle at 90% 10%,rgba(239,189,82,.14),transparent 34%),linear-gradient(135deg,rgba(255,255,255,.055),rgba(255,255,255,.015));border-radius:24px;padding:28px 30px;display:flex;justify-content:space-between;align-items:center;gap:24px;overflow:hidden}.control-hero h2{font:700 34px Georgia,serif;margin:7px 0}.control-hero h2 em{font-style:normal;color:#dcb65e}.control-hero p{margin:0;color:#9ea7a1}.hero-actions{display:flex;gap:9px;flex-wrap:wrap}.hero-actions button{border:1px solid rgba(239,189,82,.18);background:rgba(255,255,255,.04);color:#f7f2e8;border-radius:12px;padding:12px 16px;font-weight:900;cursor:pointer}.executive-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.executive-metric{min-width:0;padding:18px;border-radius:18px;border:1px solid rgba(255,255,255,.075);background:linear-gradient(145deg,rgba(255,255,255,.05),rgba(255,255,255,.018));display:flex;align-items:center;gap:14px;transition:.2s}.executive-metric:hover{transform:translateY(-2px);border-color:rgba(239,189,82,.22)}.executive-icon{width:44px;height:44px;flex:0 0 44px;border-radius:13px;display:grid;place-items:center;font-weight:1000;background:rgba(239,189,82,.1);color:#f0c55f}.executive-copy{min-width:0}.executive-copy span,.executive-copy strong,.executive-copy small{display:block}.executive-copy span{color:#aab2ad;font-size:12px;font-weight:800}.executive-copy strong{font-size:25px;margin:5px 0;color:#fff8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.executive-copy small{color:#77817b}.executive-metric.blue .executive-icon{background:rgba(89,145,255,.12);color:#8cb4ff}.executive-metric.rose .executive-icon{background:rgba(255,105,150,.12);color:#ff9cbd}.executive-metric.green .executive-icon{background:rgba(74,205,130,.12);color:#85e8ad}.executive-metric.violet .executive-icon{background:rgba(167,118,255,.13);color:#c5a5ff}.executive-metric.cyan .executive-icon{background:rgba(57,196,205,.13);color:#83e3e8}.control-main-grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(290px,.75fr);gap:16px}.control-chart .panel-heading p{color:#7f8882;margin:7px 0 0;font-size:12px}.chart-total{text-align:right}.chart-total small,.chart-total strong{display:block}.chart-total small{color:#7f8882;margin-bottom:5px}.chart-footer{display:flex;justify-content:space-between;color:#8c958f;font-size:11px;border-top:1px solid rgba(255,255,255,.06);padding-top:13px}.chart-footer span i{display:inline-block;width:8px;height:8px;border-radius:50%;background:#efbd52;margin-right:6px}.chart-footer b{color:#d7c89d}.executive-health .indicator:first-of-type{border-top:0}.health-progress{margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.07)}.health-progress>div{display:flex;justify-content:space-between;color:#9da69f;font-size:12px}.health-progress>div b{color:#f0cf76}.health-progress>i{display:block;height:7px;border-radius:20px;background:#202824;margin-top:9px;overflow:hidden}.health-progress>i em{display:block;height:100%;background:linear-gradient(90deg,#c99337,#f7dc82);border-radius:inherit}.control-bottom-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(300px,.75fr);gap:16px}.quick-actions>button{width:100%;border:0;border-top:1px solid rgba(255,255,255,.065);background:transparent;color:#fff;padding:13px 2px;display:grid;grid-template-columns:40px 1fr 16px;gap:11px;align-items:center;text-align:left;cursor:pointer}.quick-actions>button>span{width:38px;height:38px;border-radius:11px;background:rgba(239,189,82,.09);display:grid;place-items:center;color:#efbd52;font-weight:1000}.quick-actions button b,.quick-actions button small{display:block}.quick-actions button small{color:#7f8882;margin-top:3px}.quick-actions button em{font-size:24px;color:#7a837d;font-style:normal}
+
+@media(max-width:1180px){.executive-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.control-main-grid,.control-bottom-grid{grid-template-columns:1fr}.global-search{width:210px}}
 @media(max-width:1180px){.admin-page{grid-template-columns:220px 1fr}.metric-grid,.plans-grid{grid-template-columns:1fr 1fr}.business-grid{grid-template-columns:1fr}}
 @media(max-width:980px){.coupon-admin-grid{grid-template-columns:1fr 1fr}.coupon-form-grid{grid-template-columns:1fr 1fr}}
-@media(max-width:760px){.finance-form-grid{grid-template-columns:1fr}.finance-form-grid label.wide{grid-column:auto}.settings-grid,.coupon-admin-grid,.coupon-form-grid{grid-template-columns:1fr}.admin-page{display:block}.sidebar{height:auto;position:static}.sidebar nav{grid-template-columns:1fr 1fr}.sidebar-footer{display:none}.workspace{padding:20px 14px}.topbar,.welcome,.section-heading{align-items:flex-start;flex-direction:column}.metric-grid,.plans-grid{grid-template-columns:1fr}.first-sale{min-width:0;width:100%}.field-grid{grid-template-columns:1fr}}
+@media(max-width:760px){.topbar-actions{width:100%;flex-wrap:wrap}.global-search{width:100%;order:3}.notification-popover{position:fixed;left:14px;right:14px;top:80px;width:auto}.control-hero{align-items:flex-start;flex-direction:column}.control-hero h2{font-size:28px}.executive-grid{grid-template-columns:1fr}.chart-total{text-align:left}.chart-footer{gap:8px;flex-direction:column}.finance-form-grid{grid-template-columns:1fr}.finance-form-grid label.wide{grid-column:auto}.settings-grid,.coupon-admin-grid,.coupon-form-grid{grid-template-columns:1fr}.admin-page{display:block}.sidebar{height:auto;position:static}.sidebar nav{grid-template-columns:1fr 1fr}.sidebar-footer{display:none}.workspace{padding:20px 14px}.topbar,.welcome,.section-heading{align-items:flex-start;flex-direction:column}.metric-grid,.plans-grid{grid-template-columns:1fr}.first-sale{min-width:0;width:100%}.field-grid{grid-template-columns:1fr}}
 `}</style>
   );
 }

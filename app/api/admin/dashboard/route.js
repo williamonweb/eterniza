@@ -60,6 +60,8 @@ export async function GET() {
       recentUsers,
       recentTributes,
       recentPayments,
+      clinicsCount,
+      openTickets,
     ] = await Promise.all([
       prisma.user.findMany({
         where: { role: "CLIENT" },
@@ -149,6 +151,8 @@ export async function GET() {
           },
         },
       }),
+      prisma.clinic.count(),
+      prisma.supportTicket.count({ where: { status: { not: "CLOSED" } } })
     ]);
 
     const paidStatuses = new Set(["APPROVED", "RECEIVED", "CONFIRMED"]);
@@ -286,6 +290,8 @@ export async function GET() {
           (sum, tribute) => sum + tribute._count.views,
           0
         ),
+        clinics: clinicsCount,
+        openTickets,
       },
       chart,
       firstSale,
