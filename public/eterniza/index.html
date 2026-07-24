@@ -244,9 +244,21 @@
           <p class="hint">As trilhas da biblioteca Eterniza começam no clique em “Abrir surpresa”. YouTube fica como alternativa, mas pode ser bloqueado por alguns navegadores.</p>
           <div class="letter-head">
             <label>Carta / texto</label>
-            <div class="ai-tools"><select id="aiTextStyle" class="ai-style"><option value="emocionante">Emocionante longo</option><option value="romantico">Romântico profundo</option><option value="gratidao">Gratidão familiar</option><option value="amizade">Amizade marcante</option><option value="curto">Curto e direto</option></select><button id="aiTextBtn" class="ghost-btn small">Sugerir texto com IA</button></div>
+            <div class="letter-main-actions">
+              <button id="quickInspireBtn" type="button" class="ghost-btn small">✨ Inspirar texto</button>
+              <button id="aiTextBtn" type="button" class="ghost-btn small">📖 Conte sua história</button>
+            </div>
           </div>
-          <textarea id="letterText" rows="8" placeholder="Escreva aqui a mensagem emocionante..."></textarea>
+          <textarea id="letterText" rows="8" maxlength="3000" placeholder="Escreva aqui a mensagem emocionante..."></textarea>
+          <div class="letter-helper-bar">
+            <span id="letterCounter">0 / 3000 caracteres</span>
+            <div class="letter-helper-actions">
+              <button type="button" class="ghost-btn small" data-ai-action="improve">✨ Melhorar</button>
+              <button type="button" class="ghost-btn small" data-ai-action="continue">Continuar</button>
+              <button type="button" class="ghost-btn small" data-ai-action="emotional">Mais emocionante</button>
+              <button type="button" class="ghost-btn small" data-ai-action="shorten">Resumir</button>
+            </div>
+          </div>
           <label>Fotos</label>
           <input id="photos" class="hidden-file" type="file" accept="image/*" multiple />
           <p id="photoLimit" class="hint"></p>
@@ -300,6 +312,88 @@
       </section>
     </section>
   </main>
+
+
+
+  <div id="quickInspireModal" class="modal hidden">
+    <div class="modal-box quick-inspire-modal">
+      <div class="ai-assistant-head">
+        <div><span>✨ Inspirar texto</span><h3>Crie uma mensagem em poucos cliques</h3><p>Escolha para quem é, o estilo e escreva uma ideia opcional. O Eterniza monta uma sugestão sem custo.</p></div>
+        <button id="quickInspireClose" type="button" class="ai-close" aria-label="Fechar">×</button>
+      </div>
+      <div class="quick-inspire-grid">
+        <div><label>Para quem é?</label><select id="quickRecipient"><option value="amor">Amor</option><option value="mae">Mãe</option><option value="pai">Pai</option><option value="filho">Filho(a)</option><option value="avo">Avó / Avô</option><option value="amigo">Amigo(a)</option><option value="irmao">Irmão / Irmã</option><option value="outro">Outra pessoa</option></select></div>
+        <div><label>Estilo</label><select id="quickTone"><option value="emocionante">Emocionante</option><option value="romantico">Romântico</option><option value="elegante">Elegante</option><option value="simples">Simples</option><option value="alegre">Alegre</option></select></div>
+      </div>
+      <label>Sobre o que você quer falar? <small>(opcional)</small></label>
+      <textarea id="quickIdea" rows="5" maxlength="700" placeholder="Ex.: Quero agradecer por todos os anos ao meu lado e por nunca desistir de nós..."></textarea>
+      <div class="ai-assistant-actions">
+        <button id="quickInspireCancel" type="button" class="ghost-btn">Cancelar</button>
+        <button id="quickInspireGenerate" type="button" class="primary-btn">✨ Gerar texto</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="aiAssistantModal" class="modal hidden">
+    <div class="modal-box ai-assistant-modal story-wizard-modal">
+      <div class="ai-assistant-head">
+        <div><span>✨ Conte sua história</span><h3>Suas palavras viram uma homenagem</h3><p>Sem custo e sem IA externa: o Eterniza organiza o que você contar em uma carta bonita e pessoal.</p></div>
+        <button id="aiAssistantClose" type="button" class="ai-close" aria-label="Fechar">×</button>
+      </div>
+      <div class="story-progress" aria-label="Progresso">
+        <div id="storyProgressBar" class="story-progress-bar"></div>
+      </div>
+      <div id="storyStepLabel" class="story-step-label">Etapa 1 de 5</div>
+
+      <section class="story-step active" data-story-step="1">
+        <h4>Primeiro, escolha o estilo</h4>
+        <div class="ai-assistant-grid">
+          <div><label>Para quem é?</label><select id="aiRecipient"><option value="amor">Namorado(a) / Cônjuge</option><option value="mae">Mãe</option><option value="pai">Pai</option><option value="filho">Filho(a)</option><option value="avo">Avó / Avô</option><option value="amigo">Amigo(a)</option><option value="irmao">Irmão / Irmã</option><option value="outro">Outra pessoa</option></select></div>
+          <div><label>Qual é o momento?</label><select id="aiOccasion"><option>Aniversário</option><option>Declaração de amor</option><option>Casamento</option><option>Pedido de namoro</option><option>Formatura</option><option>Gratidão</option><option>Saudade</option><option>Despedida</option><option>Outro momento especial</option></select></div>
+          <div><label>Como a carta deve soar?</label><select id="aiTone"><option value="emocionante">Emocionante</option><option value="romantico">Romântica</option><option value="alegre">Alegre</option><option value="elegante">Elegante</option><option value="simples">Simples e direta</option><option value="divertido">Leve e divertida</option></select></div>
+          <div><label>Tamanho</label><select id="aiLength"><option value="longa">Carta completa</option><option value="media">Média</option><option value="curta">Curta</option></select></div>
+        </div>
+      </section>
+
+      <section class="story-step" data-story-step="2">
+        <h4>Como essa história começou?</h4>
+        <label>Como vocês se conheceram ou qual é sua primeira lembrança especial?</label>
+        <textarea id="storyBeginning" rows="6" maxlength="900" placeholder="Ex.: Nos conhecemos em 2020 por amigos em comum. Eu nunca esqueci o jeito como ela sorriu naquele dia..."></textarea>
+        <p class="hint">Pode escrever do seu jeito. O sistema apenas organiza suas próprias palavras.</p>
+      </section>
+
+      <section class="story-step" data-story-step="3">
+        <h4>Qual momento ficou marcado?</h4>
+        <label>Conte uma lembrança que você nunca quer esquecer</label>
+        <textarea id="storyHighlight" rows="6" maxlength="900" placeholder="Ex.: Nossa primeira viagem, quando passamos horas conversando e percebemos que queríamos construir uma vida juntos..."></textarea>
+      </section>
+
+      <section class="story-step" data-story-step="4">
+        <h4>O que essa pessoa representa?</h4>
+        <label>Fale sobre qualidades, sentimentos e a importância dela para você</label>
+        <textarea id="storyMeaning" rows="6" maxlength="900" placeholder="Ex.: Ela é meu porto seguro, minha melhor amiga e a pessoa que torna até os dias difíceis mais leves..."></textarea>
+      </section>
+
+      <section class="story-step" data-story-step="5">
+        <h4>Complete com suas palavras</h4>
+        <label>Se pudesse dizer apenas uma coisa hoje, o que seria?</label>
+        <textarea id="storyMessage" rows="4" maxlength="700" placeholder="Ex.: Obrigado por escolher caminhar ao meu lado. Eu te amo e escolheria você outra vez..."></textarea>
+        <div class="story-timeline-box">
+          <div class="story-timeline-head"><div><strong>Linha do tempo (opcional)</strong><small>Adicione capítulos importantes. Eles serão incluídos na carta.</small></div><button id="addStoryMoment" type="button" class="ghost-btn small">+ Adicionar momento</button></div>
+          <div id="storyMoments" class="story-moments"></div>
+        </div>
+      </section>
+
+      <div class="ai-assistant-actions story-wizard-actions">
+        <button id="aiAssistantCancel" type="button" class="ghost-btn">Cancelar</button>
+        <div class="story-nav-actions">
+          <button id="storyBack" type="button" class="ghost-btn hidden">Voltar</button>
+          <button id="storyNext" type="button" class="primary-btn">Continuar</button>
+          <button id="aiAssistantGenerate" type="button" class="primary-btn hidden">✨ Montar minha homenagem</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div id="modal" class="modal hidden">
     <div class="modal-box">

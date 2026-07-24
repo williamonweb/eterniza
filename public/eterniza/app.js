@@ -2875,3 +2875,260 @@ if(!openRoute())go('landingScreen');
     saveState();
   });
 });
+
+/* =========================================================
+   v7.3.4 - Conte sua história (motor local, sem custo externo)
+   ========================================================= */
+(function setupStoryWizard(){
+  const modal=$('aiAssistantModal');
+  const letter=$('letterText');
+  const counter=$('letterCounter');
+  const maxChars=3000;
+  if(!modal || !letter) return;
+
+  let currentStep=1;
+  const totalSteps=5;
+  let moments=[];
+
+  const syncCounter=()=>{
+    if(counter) counter.textContent=`${letter.value.length} / ${maxChars} caracteres`;
+  };
+  letter.addEventListener('input',syncCounter);
+  syncCounter();
+
+  function clean(value){ return String(value||'').trim().replace(/\s+/g,' '); }
+  function sentence(value){
+    const text=clean(value);
+    if(!text) return '';
+    return text.charAt(0).toUpperCase()+text.slice(1).replace(/[.!?]+$/,'')+'.';
+  }
+  function firstName(value,fallback='Você'){
+    const text=clean(value);
+    return text ? text.split(/\s+/)[0] : fallback;
+  }
+  function setStep(step){
+    currentStep=Math.max(1,Math.min(totalSteps,step));
+    document.querySelectorAll('[data-story-step]').forEach(section=>section.classList.toggle('active',Number(section.dataset.storyStep)===currentStep));
+    const label=$('storyStepLabel');
+    const bar=$('storyProgressBar');
+    if(label) label.textContent=`Etapa ${currentStep} de ${totalSteps}`;
+    if(bar) bar.style.width=`${(currentStep/totalSteps)*100}%`;
+    $('storyBack')?.classList.toggle('hidden',currentStep===1);
+    $('storyNext')?.classList.toggle('hidden',currentStep===totalSteps);
+    $('aiAssistantGenerate')?.classList.toggle('hidden',currentStep!==totalSteps);
+    modal.querySelector('.ai-assistant-modal')?.scrollTo({top:0,behavior:'smooth'});
+  }
+  function openWizard(){
+    if($('aiRecipient')) $('aiRecipient').value=state.recipient?.id||'outro';
+    const saved=state.storyAssistant||{};
+    const fields={storyBeginning:saved.beginning,storyHighlight:saved.highlight,storyMeaning:saved.meaning,storyMessage:saved.message};
+    Object.entries(fields).forEach(([id,value])=>{ if($(id)&&value) $(id).value=value; });
+    moments=Array.isArray(state.storyTimeline)?state.storyTimeline.map(x=>({...x})):[];
+    renderMoments();
+    setStep(1);
+    modal.classList.remove('hidden');
+  }
+  function closeWizard(){ modal.classList.add('hidden'); }
+
+  function addMoment(initial={}){
+    moments.push({id:Date.now()+Math.random(),date:initial.date||'',title:initial.title||'',text:initial.text||''});
+    renderMoments();
+  }
+  function renderMoments(){
+    const box=$('storyMoments');
+    if(!box) return;
+    if(!moments.length){ box.innerHTML='<div class="story-moments-empty">Nenhum momento adicionado. Esta parte é opcional.</div>'; return; }
+    box.innerHTML=moments.map((moment,index)=>`<div class="story-moment" data-moment-index="${index}">
+      <div class="story-moment-number">${index+1}</div>
+      <div class="story-moment-fields">
+        <input data-moment-field="date" value="${escapeHtml(moment.date||'')}" placeholder="Data ou ano (opcional)" maxlength="30" />
+        <input data-moment-field="title" value="${escapeHtml(moment.title||'')}" placeholder="Título do momento" maxlength="80" />
+        <textarea data-moment-field="text" rows="2" placeholder="O que aconteceu?" maxlength="280">${escapeHtml(moment.text||'')}</textarea>
+      </div>
+      <button type="button" class="story-moment-remove" data-remove-moment="${index}" aria-label="Remover">×</button>
+    </div>`).join('');
+    box.querySelectorAll('[data-moment-field]').forEach(input=>input.addEventListener('input',event=>{
+      const row=event.target.closest('[data-moment-index]');
+      const index=Number(row?.dataset.momentIndex);
+      if(moments[index]) moments[index][event.target.dataset.momentField]=event.target.value;
+    }));
+    box.querySelectorAll('[data-remove-moment]').forEach(button=>button.onclick=()=>{moments.splice(Number(button.dataset.removeMoment),1);renderMoments();});
+  }
+
+  const intros={
+    romantico:name=>`${name}, algumas histórias começam devagar e, quando percebemos, já se tornaram parte de tudo o que somos.`,
+    emocionante:name=>`${name}, existem pessoas que deixam marcas tão bonitas que o tempo nunca consegue apagar.`,
+    alegre:name=>`${name}, lembrar da nossa história é lembrar de sorrisos, aventuras e tantos motivos para celebrar.`,
+    elegante:name=>`${name}, algumas histórias merecem ser contadas com calma, beleza e profunda gratidão.`,
+    simples:name=>`${name}, preparei esta homenagem para dizer com sinceridade o quanto você é importante para mim.`,
+    divertido:name=>`${name}, nossa história tem carinho, risadas, momentos inesperados e lembranças que dariam um filme inteiro.`
+  };
+  const transitions={
+    romantico:'Desde então, cada detalhe foi transformando esse encontro em uma história que eu escolheria viver novamente.',
+    emocionante:'Desde então, cada momento compartilhado ganhou um lugar especial dentro de mim.',
+    alegre:'A partir dali vieram conversas, risadas e lembranças que ainda hoje fazem o coração sorrir.',
+    elegante:'Com o tempo, os pequenos gestos revelaram a beleza e a importância dessa ligação.',
+    simples:'Com o passar do tempo, fomos construindo lembranças que eu guardo com muito carinho.',
+    divertido:'E depois disso vieram histórias que só nós entendemos, muitas risadas e momentos impossíveis de esquecer.'
+  };
+  const endings={
+    romantico:'Nossa história merece ser celebrada e eternizada. Que esta homenagem te faça sentir, em cada palavra, o amor que existe aqui.',
+    emocionante:'Espero que esta homenagem mostre ao menos um pouco do tamanho da sua importância e do carinho que guardo por tudo o que vivemos.',
+    alegre:'Que nunca nos faltem motivos para comemorar, sorrir e criar novas lembranças juntos.',
+    elegante:'Que estas palavras permaneçam como um registro sincero de admiração, carinho e gratidão.',
+    simples:'Obrigado por fazer parte da minha vida. Esta homenagem é um jeito simples e verdadeiro de guardar nossa história.',
+    divertido:'Que venham muitos outros capítulos, novas aventuras e histórias boas para lembrar e contar.'
+  };
+  function signFor(recipient,tone,sender){
+    const sign=recipient==='amor'&&tone==='romantico'?'Com todo o meu amor,':(['mae','pai','avo'].includes(recipient)?'Com amor, gratidão e admiração,':'Com todo carinho,');
+    return `${sign}\n${sender||'alguém que te ama'}`;
+  }
+  function timelineParagraph(){
+    const valid=moments.map(x=>({date:clean(x.date),title:clean(x.title),text:clean(x.text)})).filter(x=>x.title||x.text);
+    if(!valid.length) return '';
+    const chapters=valid.map(x=>{const head=[x.date,x.title].filter(Boolean).join(' — ');return `${head?head+': ':''}${x.text||'um capítulo inesquecível da nossa história'}.`;});
+    return `Nossa história também é feita de capítulos que merecem ser lembrados:\n\n${chapters.join('\n')}`;
+  }
+  function resizeParagraphs(paragraphs,length){
+    const cleanParts=paragraphs.filter(Boolean);
+    if(length==='curta') return [cleanParts[0],cleanParts[Math.max(1,cleanParts.length-2)],cleanParts[cleanParts.length-1]].filter(Boolean).join('\n\n');
+    if(length==='media'&&cleanParts.length>5) return [cleanParts[0],cleanParts[1],cleanParts[3],cleanParts[cleanParts.length-2],cleanParts[cleanParts.length-1]].filter(Boolean).join('\n\n');
+    return cleanParts.join('\n\n');
+  }
+  function suggestTheme(recipient,tone){
+    let id='minimal';
+    if(recipient==='amor') id='romance';
+    else if(recipient==='mae') id='jardim';
+    else if(recipient==='pai') id='legado';
+    else if(recipient==='amigo'||tone==='alegre'||tone==='divertido') id='celebracao';
+    else if(recipient==='filho') id='doce';
+    else if(recipient==='avo') id='memorias';
+    const theme=themeLibrary.find(item=>item.id===id);
+    if(theme) applyTheme(theme);
+  }
+  function suggestTrack(recipient,tone){
+    const desired=recipient==='amor'?(tone==='romantico'?'track-romantic-piano':'track-wedding-story')
+      :recipient==='mae'?'track-mothers-day':recipient==='pai'?'track-heroic':tone==='alegre'||tone==='divertido'?'track-happy-memories':'track-cinematic-emotional';
+    const select=$('musicMode');
+    if(select&&[...select.options].some(option=>option.value===desired)){
+      select.value=desired;state.musicMode=desired;state.selectedTrack=currentTrack();updateTrackInfo();
+    }
+  }
+  function generateStory(){
+    const recipient=$('aiRecipient')?.value||state.recipient?.id||'outro';
+    const occasion=$('aiOccasion')?.value||'momento especial';
+    const tone=$('aiTone')?.value||'emocionante';
+    const length=$('aiLength')?.value||'longa';
+    const beginning=clean($('storyBeginning')?.value);
+    const highlight=clean($('storyHighlight')?.value);
+    const meaning=clean($('storyMeaning')?.value);
+    const message=clean($('storyMessage')?.value);
+    if(!beginning&&!highlight&&!meaning&&!message){
+      showModal('Conte um pouco da história','Preencha pelo menos uma das etapas com uma lembrança ou sentimento para montarmos uma homenagem pessoal.');
+      return;
+    }
+    const receiver=firstName($('receiverName')?.value);
+    const sender=clean($('senderName')?.value);
+    const parts=[
+      `${(intros[tone]||intros.emocionante)(receiver)}\n\nHoje, neste momento de ${occasion.toLowerCase()}, eu quis transformar um pouco do que sinto em uma lembrança para sempre.`,
+      beginning?`${sentence(beginning)} ${transitions[tone]||transitions.emocionante}`:'',
+      highlight?`Entre tantas lembranças, existe uma que ocupa um lugar especial no meu coração: ${sentence(highlight).replace(/^./,c=>c.toLowerCase())}`:'',
+      meaning?`Para mim, você representa muito mais do que consigo resumir em poucas palavras. ${sentence(meaning)}`:'',
+      timelineParagraph(),
+      message?`E, se eu pudesse deixar apenas uma mensagem hoje, seria esta: ${sentence(message)}`:'',
+      endings[tone]||endings.emocionante,
+      signFor(recipient,tone,sender)
+    ];
+    const result=resizeParagraphs(parts,length).slice(0,maxChars);
+    letter.value=result;
+    state.letterText=result;
+    state.storyAssistant={recipient,occasion,tone,length,beginning,highlight,meaning,message};
+    state.storyTimeline=moments.map(({date,title,text})=>({date:clean(date),title:clean(title),text:clean(text)})).filter(x=>x.date||x.title||x.text);
+    suggestTheme(recipient,tone);suggestTrack(recipient,tone);saveState();syncCounter();closeWizard();
+    showModal('Sua homenagem foi montada','Usamos as suas próprias palavras para criar a carta. Revise e ajuste qualquer detalhe antes de continuar.');
+  }
+
+  const quickTemplates={
+    amor:{
+      romantico:[['Meu amor, algumas pessoas chegam e mudam o sentido de tudo. Você fez isso comigo.','Ao seu lado, os dias ganharam mais cor, os planos mais sentido e o coração encontrou um lugar para chamar de casa.','Eu escolheria você outra vez, em cada vida e em cada novo começo.'],['Desde que você entrou na minha vida, amar deixou de ser apenas uma palavra e passou a ser a nossa história.','Cada abraço, conversa e pequeno gesto seu se tornou parte das minhas melhores lembranças.','Que a gente continue escrevendo essa história com carinho, cumplicidade e muito amor.']],
+      emocionante:[['Há sentimentos que parecem grandes demais para caber em palavras, e o que sinto por você é um deles.','Você esteve presente nos momentos mais bonitos e também naqueles em que eu mais precisei de força.','Esta homenagem é só uma pequena forma de dizer o quanto você é essencial para mim.']],
+      simples:[['Quero que você saiba o quanto é importante para mim.','Sou muito feliz por dividir a vida, os sonhos e os momentos simples ao seu lado.','Obrigado por existir e por fazer parte da minha história.']],
+      alegre:[['Nossa história é feita de amor, risadas e momentos que deixam qualquer dia melhor.','Com você, até os planos mais simples viram lembranças especiais.','Que nunca nos faltem motivos para sorrir e celebrar o que construímos juntos.']],
+      elegante:[['Alguns encontros transformam uma vida inteira, e o nosso foi assim.','Sua presença trouxe beleza, equilíbrio e significado aos meus dias.','Receba estas palavras como um registro sincero da minha admiração e do meu amor.']]
+    },
+    mae:{
+      emocionante:[['Mãe, nenhuma palavra é grande o bastante para agradecer tudo o que você representa.','Seu cuidado, sua força e seu amor estiveram presentes em cada parte da minha caminhada.','Esta homenagem é para lembrar que muito do que sou nasceu do amor que você sempre me deu.']],
+      simples:[['Mãe, quero agradecer por tudo o que você faz e por nunca deixar faltar amor.','Você é meu exemplo, meu porto seguro e uma das pessoas mais importantes da minha vida.','Eu te amo e tenho muito orgulho de ser parte da sua história.']],
+      alegre:[['Mãe, falar de você é lembrar de carinho, cuidado e tantos momentos felizes.','Seu jeito torna a vida mais leve e nossa família mais unida.','Que hoje você receba todo o amor que oferece todos os dias.']],
+      elegante:[['Mãe, sua presença é uma referência de força, generosidade e amor.','Em cada gesto seu existe uma lição que levo comigo.','Receba minha eterna gratidão e toda a minha admiração.']],
+      romantico:[['Mãe, o primeiro amor que conheci foi o seu: inteiro, paciente e verdadeiro.','Seu carinho me ensinou que o amor vive nos cuidados mais simples.','Eu te amo profundamente e agradeço por ter você em minha vida.']]
+    },
+    pai:{
+      emocionante:[['Pai, sua presença deixou marcas profundas e bonitas na minha história.','Em seus conselhos, exemplos e até em seus silêncios, aprendi muito sobre força e coragem.','Esta homenagem leva minha gratidão, meu respeito e todo o carinho que sinto por você.']],
+      simples:[['Pai, quero agradecer por tudo o que você representa para mim.','Seu exemplo e sua presença fizeram diferença em muitos momentos da minha vida.','Tenho orgulho de você e guardo com carinho tudo o que vivemos.']],
+      alegre:[['Pai, nossa história tem aprendizados, risadas e muitas lembranças boas.','Você sempre encontrou um jeito de tornar os momentos mais leves e especiais.','Que ainda possamos viver e celebrar muitos capítulos juntos.']],
+      elegante:[['Pai, seu exemplo construiu um legado de caráter, coragem e dedicação.','Sua influência permanece em minhas escolhas e em tudo o que busco ser.','Receba minha sincera admiração e gratidão.']],
+      romantico:[['Pai, seu amor sempre apareceu na proteção, no cuidado e na vontade de me ver bem.','Mesmo quando as palavras eram poucas, seus gestos diziam tudo.','Eu te amo e agradeço por cada parte da nossa história.']]
+    },
+    filho:{emocionante:[['Meu filho, desde que você chegou, meu coração aprendeu uma forma de amor que eu ainda não conhecia.','Ver você crescer, aprender e descobrir o mundo é um dos maiores presentes da minha vida.','Estarei sempre ao seu lado, torcendo por você e amando cada parte de quem você é.']],simples:[['Meu filho, você é uma das maiores alegrias da minha vida.','Tenho muito orgulho de você e de tudo o que está se tornando.','Eu te amo e sempre estarei ao seu lado.']]},
+    avo:{emocionante:[['Falar de você é abrir um álbum cheio de afeto, ensinamentos e memórias.','Seu carinho atravessa gerações e continua presente em tantos detalhes da nossa família.','Esta homenagem guarda minha gratidão por tudo o que você representa.']],simples:[['Você ocupa um lugar muito especial na minha vida e na nossa família.','Guardo com carinho seus conselhos, histórias e gestos de amor.','Obrigado por tantas lembranças bonitas.']]},
+    amigo:{alegre:[['Amizade de verdade é aquela que transforma encontros simples em histórias inesquecíveis.','Com você, não faltam risadas, parceria e lembranças que sempre fazem bem.','Que nossa amizade continue rendendo muitos capítulos e aventuras.']],emocionante:[['Algumas amizades se tornam família, e a nossa é assim.','Obrigado por estar presente, por ouvir, apoiar e dividir tantos momentos importantes.','Sua amizade é um presente que quero guardar para sempre.']]},
+    irmao:{emocionante:[['Nossa história começou antes mesmo de entendermos o valor que teríamos um para o outro.','Entre diferenças, risadas e lembranças, existe um vínculo que o tempo só fortalece.','Tenho muita gratidão por dividir a vida e a família com você.']],alegre:[['Ter você como irmão é ter companhia para as histórias boas, as confusões e as melhores lembranças.','A gente pode até discordar, mas o carinho sempre fala mais alto.','Que nunca faltem risadas e novos momentos para contar.']]},
+    outro:{emocionante:[['Algumas pessoas deixam uma marca tão especial que merecem ser lembradas em palavras.','Sua presença fez diferença em momentos importantes e trouxe significado à minha história.','Receba esta homenagem como um gesto sincero de carinho e gratidão.']],simples:[['Preparei esta mensagem para dizer o quanto você é importante.','Guardo com carinho os momentos, ensinamentos e sentimentos que compartilhamos.','Obrigado por fazer parte da minha história.']]}
+  };
+  function quickTemplate(recipient,tone){
+    const group=quickTemplates[recipient]||quickTemplates.outro;
+    const list=group[tone]||group.emocionante||group.simples||Object.values(group)[0];
+    return list[Math.floor(Math.random()*list.length)];
+  }
+  function generateQuickInspiration(){
+    const recipient=$('quickRecipient')?.value||state.recipient?.id||'outro';
+    const tone=$('quickTone')?.value||'emocionante';
+    const idea=clean($('quickIdea')?.value);
+    const receiver=firstName($('receiverName')?.value,'Você');
+    const sender=clean($('senderName')?.value);
+    let parts=quickTemplate(recipient,tone).map(x=>x.replace(/Meu amor|Mãe|Pai/g,m=>receiver&&receiver!=='Você'?receiver:m));
+    if(idea) parts.splice(2,0,`E existe algo que eu quero guardar nesta mensagem: ${sentence(idea).replace(/^./,c=>c.toLowerCase())}`);
+    parts.push(signFor(recipient,tone,sender));
+    const result=parts.join('\n\n').slice(0,maxChars);
+    letter.value=result;state.letterText=result;suggestTheme(recipient,tone);suggestTrack(recipient,tone);saveState();syncCounter();closeQuick();
+    showModal('Texto criado','A sugestão foi colocada na carta. Você pode editar livremente para deixar tudo com a sua cara.');
+  }
+  const quickModal=$('quickInspireModal');
+  function openQuick(){
+    if($('quickRecipient')) $('quickRecipient').value=state.recipient?.id||'amor';
+    if($('quickIdea')) $('quickIdea').value='';
+    quickModal?.classList.remove('hidden');
+    setTimeout(()=>$('quickIdea')?.focus(),80);
+  }
+  function closeQuick(){quickModal?.classList.add('hidden');}
+
+  function improveText(text){const value=clean(text);if(!value)return '';return `${sentence(value)}\n\nMais do que palavras, esta mensagem carrega carinho, gratidão e tudo aquilo que torna essa história tão especial.`;}
+  function continueText(text){const value=String(text||'').trim();if(!value)return '';return `${value}\n\nE ainda há tanto para agradecer, celebrar e viver. Que o futuro nos traga novos capítulos e muitas lembranças bonitas.`;}
+  function emotionalText(text){const value=String(text||'').trim();if(!value)return '';return `${value}\n\nTalvez eu nunca consiga explicar por completo o tamanho da sua importância, mas espero que estas palavras mostrem um pouco do que meu coração sente.`;}
+  function shortenText(text){const paragraphs=String(text||'').split(/\n\s*\n/).map(x=>x.trim()).filter(Boolean);if(paragraphs.length<=3)return String(text||'').slice(0,900);return [paragraphs[0],paragraphs[Math.floor(paragraphs.length/2)],paragraphs[paragraphs.length-1]].join('\n\n').slice(0,1200);}
+  function runTextAction(action){
+    const original=letter.value.trim();
+    if(!original){showModal('Escreva algo primeiro','Digite uma parte da carta ou use “Conte sua história” para montar um texto completo.');return;}
+    const handlers={improve:improveText,continue:continueText,emotional:emotionalText,shorten:shortenText};
+    const result=(handlers[action]||((x)=>x))(original).slice(0,maxChars);letter.value=result;state.letterText=result;saveState();syncCounter();
+    const labels={improve:'Texto melhorado',continue:'Texto continuado',emotional:'Mais emoção adicionada',shorten:'Texto resumido'};
+    showModal(labels[action]||'Texto atualizado','Revise o resultado e ajuste qualquer detalhe antes de continuar.');
+  }
+
+  $('quickInspireBtn').onclick=openQuick;
+  $('quickInspireClose').onclick=closeQuick;
+  $('quickInspireCancel').onclick=closeQuick;
+  $('quickInspireGenerate').onclick=generateQuickInspiration;
+  quickModal?.addEventListener('click',event=>{if(event.target===quickModal)closeQuick();});
+  $('aiTextBtn').onclick=openWizard;
+  $('aiAssistantClose').onclick=closeWizard;
+  $('aiAssistantCancel').onclick=closeWizard;
+  $('storyNext').onclick=()=>setStep(currentStep+1);
+  $('storyBack').onclick=()=>setStep(currentStep-1);
+  $('addStoryMoment').onclick=()=>addMoment();
+  $('aiAssistantGenerate').onclick=generateStory;
+  modal.addEventListener('click',event=>{if(event.target===modal)closeWizard();});
+  document.querySelectorAll('[data-ai-action]').forEach(button=>button.onclick=()=>runTextAction(button.dataset.aiAction));
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'){if(!modal.classList.contains('hidden'))closeWizard();if(quickModal&&!quickModal.classList.contains('hidden'))closeQuick();}});
+})();
