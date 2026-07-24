@@ -9,6 +9,60 @@ const recipients = [
   {id:'outro', title:'Outra pessoa', emoji:'💫', desc:'Tema versátil e elegante.', theme:'Minimal Chic', className:'theme-outro'}
 ];
 
+
+const themeLibrary = [
+  {id:'romance', name:'Romance', emoji:'❤️', className:'theme-amor', primary:'#ff3d83', secondary:'#6c4cff', desc:'Rosa intenso e violeta para declarações e histórias de amor.', recipients:['amor']},
+  {id:'jardim', name:'Jardim Afetivo', emoji:'🌷', className:'theme-mae', primary:'#f6a4b8', secondary:'#b783ff', desc:'Delicado, acolhedor e familiar.', recipients:['mae','avo']},
+  {id:'legado', name:'Legado Clássico', emoji:'🛡️', className:'theme-pai', primary:'#315a7d', secondary:'#c88b4a', desc:'Azul profundo e dourado para homenagens marcantes.', recipients:['pai']},
+  {id:'celebracao', name:'Celebração', emoji:'🎉', className:'theme-amigo', primary:'#00b7ff', secondary:'#ffbd4a', desc:'Vibrante e alegre para amizades e aniversários.', recipients:['amigo']},
+  {id:'doce', name:'Mundo Doce', emoji:'🧸', className:'theme-filho', primary:'#73d2ff', secondary:'#ff96d5', desc:'Leve e carinhoso para filhos e histórias especiais.', recipients:['filho']},
+  {id:'memorias', name:'Álbum de Memórias', emoji:'📖', className:'theme-avo', primary:'#c89b61', secondary:'#806044', desc:'Tons quentes com sensação de lembrança e tradição.', recipients:['avo']},
+  {id:'minimal', name:'Minimal Elegante', emoji:'✨', className:'theme-outro', primary:'#9a8cff', secondary:'#4fd1c5', desc:'Versátil, moderno e elegante para qualquer história.', recipients:['irmao','outro']}
+];
+
+function defaultThemeForRecipient(recipientId){
+  return themeLibrary.find(theme=>theme.recipients.includes(recipientId)) || themeLibrary[themeLibrary.length-1];
+}
+function selectedTheme(){
+  return themeLibrary.find(theme=>theme.id===state.themeId) || defaultThemeForRecipient(state.recipient?.id||'outro');
+}
+function applyTheme(theme,{persist=true}={}){
+  if(!theme) return;
+  state.themeId=theme.id;
+  state.themeName=theme.name;
+  state.themeClassName=theme.className;
+  state.primaryColor=theme.primary;
+  state.secondaryColor=theme.secondary;
+  const primary=$('primaryColor'), secondary=$('secondaryColor');
+  if(primary) primary.value=theme.primary;
+  if(secondary) secondary.value=theme.secondary;
+  renderThemeLibrary();
+  updateSelectedThemeBox();
+  if(persist) saveState();
+}
+function updateSelectedThemeBox(){
+  const box=$('selectedThemeBox');
+  if(!box) return;
+  const theme=selectedTheme();
+  const recipient=state.recipient||recipients[0];
+  box.innerHTML=`<strong>${theme.emoji} ${esc(theme.name)}</strong><br><span>${esc(theme.desc)} Escolhido para ${esc(recipient.title)}.</span>`;
+  box.className=`selected-theme ${theme.className}`;
+}
+function renderThemeLibrary(){
+  const grid=$('themeLibraryGrid');
+  if(!grid) return;
+  const active=selectedTheme();
+  grid.innerHTML=themeLibrary.map(theme=>`
+    <button type="button" class="theme-choice ${active.id===theme.id?'active':''}" data-theme-id="${theme.id}" style="--theme-p:${theme.primary};--theme-s:${theme.secondary}">
+      <span class="theme-choice-preview"><i></i><i></i></span>
+      <span class="theme-choice-copy"><strong>${theme.emoji} ${esc(theme.name)}</strong><small>${esc(theme.desc)}</small></span>
+      <span class="theme-choice-check">✓</span>
+    </button>`).join('');
+  grid.querySelectorAll('[data-theme-id]').forEach(button=>{
+    button.onclick=()=>applyTheme(themeLibrary.find(theme=>theme.id===button.dataset.themeId));
+  });
+}
+
 const musicLibrary = [
   {id:'track-wedding-story', cat:'❤️ Romance', title:'Wedding Story', desc:'Trilha cinematográfica para histórias de amor com cara de filme.', src:'assets/audio/romance/wedding-story.mp3', types:['amor','outro']},
   {id:'track-romantic-piano', cat:'❤️ Romance', title:'Romantic Piano', desc:'Piano delicado para declarações íntimas e emocionantes.', src:'assets/audio/romance/romantic-piano.mp3', types:['amor','outro']},
@@ -406,6 +460,12 @@ function renderRecipients(){
 
   document.querySelectorAll('[data-recipient]').forEach(b=>b.onclick=()=>{
     state.recipient = recipients.find(r => r.id === b.dataset.recipient);
+    const recipientTheme=defaultThemeForRecipient(state.recipient.id);
+    state.themeId=recipientTheme.id;
+    state.themeName=recipientTheme.name;
+    state.themeClassName=recipientTheme.className;
+    state.primaryColor=recipientTheme.primary;
+    state.secondaryColor=recipientTheme.secondary;
     state.plan = null;
     saveState();
     renderPlans();
@@ -456,10 +516,18 @@ function renderLandingPlans(){
 function prepareDetails(){
   const r=state.recipient||recipients[0], p=state.plan;
   if(!p){ renderPlans(); go('planScreen'); return; }
-  $('selectedThemeBox').innerHTML=`<strong>${r.theme}</strong><br><span>Tema automático para ${r.title}. Você ainda pode escolher as cores da página.</span>`;
-  $('selectedThemeBox').className=`selected-theme ${r.className}`;
-  $('primaryColor').value=state.primaryColor||'#ff4f9a';
-  $('secondaryColor').value=state.secondaryColor||'#8e5cff';
+  const fallbackTheme=defaultThemeForRecipient(r.id);
+  if(!state.themeId || !themeLibrary.some(theme=>theme.id===state.themeId)){
+    state.themeId=fallbackTheme.id;
+    state.themeName=fallbackTheme.name;
+    state.themeClassName=fallbackTheme.className;
+    state.primaryColor=fallbackTheme.primary;
+    state.secondaryColor=fallbackTheme.secondary;
+  }
+  updateSelectedThemeBox();
+  renderThemeLibrary();
+  $('primaryColor').value=state.primaryColor||fallbackTheme.primary;
+  $('secondaryColor').value=state.secondaryColor||fallbackTheme.secondary;
   renderMusicOptions();
   toggleYoutubeField();
   const dateWrap=$('specialDate')?.closest('div');
@@ -695,7 +763,7 @@ function aiSuggestion(){
   $('letterText').value=suggestion.slice(0,Number(systemSettings.aiMaxCharacters||3000));
   showModal('Texto criado','Criei uma sugestão mais completa. Você pode editar tudo antes de gerar a homenagem.');
 }
-async function buildPreview(){delete document.body.dataset.publicGift;if(!state.recipient)return showModal('Falta informação','Escolha para quem é a homenagem.');if(!state.plan){renderPlans();go('planScreen');return showModal('Escolha o plano','Selecione um plano antes de continuar.');}state.receiverName=$('receiverName').value.trim();state.senderName=$('senderName').value.trim();state.specialDate=$('specialDate').value;state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();state.youtubeLink=$('youtubeLink').value.trim();state.letterText=$('letterText').value.trim();state.primaryColor=$('primaryColor').value;state.secondaryColor=$('secondaryColor').value;if(!state.receiverName||!state.senderName||!state.letterText)return showModal('Campos obrigatórios','Preencha quem recebe, quem envia e a carta.');const id=youtubeId(state.youtubeLink);if(state.musicMode==='youtube'&&state.youtubeLink&&!id)return showModal('Link inválido','Cole um link válido do YouTube.');state.youtubeId=state.musicMode==='youtube'?id:'';state.photos=(Array.isArray(state.photos)?state.photos:[]).slice(0,planPhotoLimit(state.plan));saveState();renderPreview();go('previewScreen')}
+async function buildPreview(){delete document.body.dataset.publicGift;if(!state.recipient)return showModal('Falta informação','Escolha para quem é a homenagem.');if(!state.plan){renderPlans();go('planScreen');return showModal('Escolha o plano','Selecione um plano antes de continuar.');}state.receiverName=$('receiverName').value.trim();state.senderName=$('senderName').value.trim();state.specialDate=$('specialDate').value;state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();state.youtubeLink=$('youtubeLink').value.trim();state.letterText=$('letterText').value.trim();state.primaryColor=$('primaryColor').value;state.secondaryColor=$('secondaryColor').value;state.themeName=selectedTheme().name;state.themeClassName=selectedTheme().className;if(!state.receiverName||!state.senderName||!state.letterText)return showModal('Campos obrigatórios','Preencha quem recebe, quem envia e a carta.');const id=youtubeId(state.youtubeLink);if(state.musicMode==='youtube'&&state.youtubeLink&&!id)return showModal('Link inválido','Cole um link válido do YouTube.');state.youtubeId=state.musicMode==='youtube'?id:'';state.photos=(Array.isArray(state.photos)?state.photos:[]).slice(0,planPhotoLimit(state.plan));saveState();renderPreview();go('previewScreen')}
 function esc(txt){return String(txt||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function previewProtectionId(){
   const base=[state.tributeId,state.userEmail,state.receiverName,state.senderName,state.specialDate].filter(Boolean).join('|');
@@ -723,7 +791,8 @@ function renderPreview(){
   const photoList=(state.photos||[]).filter(Boolean);
   const storyLines=getStoryLines(r.id,state.receiverName,state.senderName);
   const frames=photoList.map((src,i)=>`<div class="story-frame ${i===0?'active':''}" data-cine="${i}"><img src="${src}" alt="Foto ${i+1}"><span>${storyCaption(r.id,i)}</span></div>`).join('');
-  $('giftPreview').className=`gift-preview storytelling ${r.className}`;
+  const theme=selectedTheme();
+  $('giftPreview').className=`gift-preview storytelling ${theme.className}`;
   $('giftPreview').style.setProperty('--p',state.primaryColor||'#ff4f9a');
   $('giftPreview').style.setProperty('--s',state.secondaryColor||'#8e5cff');
   $('giftPreview').innerHTML=`
@@ -733,7 +802,7 @@ function renderPreview(){
       <div class="story-particles" aria-hidden="true"></div>
       <div class="story-open" id="storyOpen">
         <img class="story-logo" src="assets/brand/logo-eterniza.png" alt="Eterniza" />
-        <span class="badge">${esc(r.theme)}</span>
+        <span class="badge">${theme.emoji} ${esc(theme.name)}</span>
         <h2>${esc(state.receiverName)},<br>você recebeu uma homenagem especial.</h2>
         <p>Criada com carinho por <strong>${esc(state.senderName)}</strong>.</p>
         <button type="button" class="primary-btn story-start" id="startSurprise">❤️ Abrir surpresa</button>
@@ -741,7 +810,7 @@ function renderPreview(){
       </div>
       <div class="story-content" id="storyContent">
         <div class="story-topbar">
-          <span>${esc(r.theme)}</span>
+          <span>${theme.emoji} ${esc(theme.name)}</span>
           ${systemSettings.musicShowPlayer!==false&&((state.musicMode!=='youtube'&&currentTrack())||state.youtubeId)?`<button type="button" id="playMusic" class="music-pill">▶ Música</button>`:''}
         </div>
         <div class="eterniza-title-card">
@@ -769,7 +838,7 @@ function renderPreview(){
         ${state.youtubeId?`<div id="ytHolder" class="youtube-audio-host" aria-hidden="true"></div>`:''}
       </div>
     </section>`;
-  $('orderSummary').innerHTML=`<div class="order-line"><span>Cliente</span><strong>${esc(state.userEmail||'-')}</strong></div><div class="order-line"><span>Para</span><strong>${esc(r.title)}</strong></div><div class="order-line"><span>Tema</span><strong>${esc(r.theme)}</strong></div><div class="order-line"><span>Plano</span><strong>${esc(p.name)}</strong></div><div class="order-line"><span>Valor</span><strong>${esc(p.price)}</strong></div><div class="order-line"><span>Fotos</span><strong>${photoList.length}/${planPhotoLimit(p)}</strong></div><div class="order-line"><span>Validade</span><strong>${esc(p.duration)}</strong></div>`;
+  $('orderSummary').innerHTML=`<div class="order-line"><span>Cliente</span><strong>${esc(state.userEmail||'-')}</strong></div><div class="order-line"><span>Para</span><strong>${esc(r.title)}</strong></div><div class="order-line"><span>Tema</span><strong>${esc(theme.name)}</strong></div><div class="order-line"><span>Plano</span><strong>${esc(p.name)}</strong></div><div class="order-line"><span>Valor</span><strong>${esc(p.price)}</strong></div><div class="order-line"><span>Fotos</span><strong>${photoList.length}/${planPhotoLimit(p)}</strong></div><div class="order-line"><span>Validade</span><strong>${esc(p.duration)}</strong></div>`;
   if(showMoments){timer=setInterval(()=>{const nc=diff(state.specialDate);const el=$('liveCounter');if(el)el.innerHTML=liveCounterHtml(nc, r.id)},1000)}
   setTimeout(initStorytelling,100);
 }
@@ -2797,3 +2866,12 @@ window.addEventListener('pagehide',stopAllMediaPlayback);
 window.addEventListener('beforeunload',stopAllMediaPlayback);
 document.addEventListener('visibilitychange',()=>{if(document.hidden) stopAllMediaPlayback();});
 if(!openRoute())go('landingScreen');
+
+
+['primaryColor','secondaryColor'].forEach(id=>{
+  const input=$(id);
+  if(input) input.addEventListener('input',()=>{
+    state[id]=input.value;
+    saveState();
+  });
+});
