@@ -65,7 +65,7 @@ export async function POST(req) {
     const photoLimit = Number(plan.photos || 0);
     if (!photoLimit || photos.length > photoLimit) {
       return NextResponse.json(
-        { ok: false, message: `O plano ${plan.name} permite até ${photoLimit} foto(s).` },
+        { ok: false, message: `O plano ${plan.name} permite até ${photoLimit} fotos.` },
         { status: 400 }
       );
     }

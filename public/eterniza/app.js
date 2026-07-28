@@ -137,7 +137,7 @@ function previewSelectedTrack(btn){
 
 let plans = [
   {id:'essencial', slug:'essencial', name:'Essencial', price:'R$ 19,90', cents:1990, photos:2, duration:'1 mês', features:['2 fotos','Música por YouTube','Carta personalizada'], desc:'Para uma homenagem simples e emocionante.'},
-  {id:'premium', slug:'premium', name:'Premium', price:'R$ 39,90', cents:3990, photos:10, duration:'vitalício', features:['10 fotos','Música de fundo','Carta personalizada','Contador para casais','Data especial para casais'], desc:'O mais escolhido. História completa com QR Code.'},
+  {id:'premium', slug:'premium', name:'Premium', price:'R$ 39,90', cents:3990, photos:10, duration:'vitalício', features:['10 fotos','Música de fundo','Carta personalizada','Contador para casais','Data especial para casais','QR Code'], desc:'O mais escolhido. História completa com QR Code.'},
   {id:'eterno', slug:'eterno', name:'Eterno', price:'R$ 69,90', cents:6990, photos:20, duration:'vitalício', features:['20 fotos','Música de fundo','Carta personalizada','QR Code','Página vitalícia'], desc:'Experiência completa para eternizar para sempre.'}
 ];
 
@@ -488,7 +488,7 @@ function selectPlan(plan){
   if(removed>0){
     setTimeout(()=>showModal(
       'Fotos ajustadas ao plano',
-      `O plano ${plan.name} permite até ${max} foto(s). ${removed} foto(s) excedente(s) foram removidas.`
+      `O plano ${plan.name} permite até ${max} fotos. ${removed} fotos excedente(s) foram removidas.`
     ),80);
   }
 }
@@ -496,7 +496,7 @@ function selectPlan(plan){
 function renderPlans(){
   $('planGrid').innerHTML=plans.map(p=>{
     const photoLimit=planPhotoLimit(p);
-    return `<button class="plan-card" data-plan="${p.id}"><strong>${p.name}</strong>${p.promoActive?`<em class="promo-badge">${esc(p.promoName||'Promoção')}</em>`:''}<div class="price">${p.price}</div>${p.promoActive&&p.regularPriceCents?`<small class="old-price">de ${formatPlanCurrencyFromCents(p.regularPriceCents)}</small>`:''}<p><b>${photoLimit} foto(s)</b> • Online: <b>${p.duration}</b></p><ul>${(p.features||[]).map(f=>`<li>${f}</li>`).join('')}</ul></button>`;
+    return `<button class="plan-card" data-plan="${p.id}"><strong>${p.name}</strong>${p.promoActive?`<em class="promo-badge">${esc(p.promoName||'Promoção')}</em>`:''}<div class="price">${p.price}</div>${p.promoActive&&p.regularPriceCents?`<small class="old-price">de ${formatPlanCurrencyFromCents(p.regularPriceCents)}</small>`:''}<p><b>${photoLimit} fotos</b> • ${p.duration==='vitalício'?'Acesso vitalício':`Acesso por <b>${p.duration}</b>`}</p><ul>${(p.features||[]).map(f=>`<li>${f}</li>`).join('')}</ul></button>`;
   }).join('');
   document.querySelectorAll('[data-plan]').forEach(b=>b.onclick=()=>selectPlan(plans.find(p=>p.id===b.dataset.plan)));
 }
@@ -536,7 +536,7 @@ function prepareDetails(){
   if(dateLabel){dateLabel.textContent = dateLabelForRecipient(r.id);}
   const maxPhotos=planPhotoLimit(p);
   state.plan={...p,photos:maxPhotos};
-  $('photoLimit').textContent=`Seu plano ${p.name} permite até ${maxPhotos} foto(s). Clique em cada caixa para adicionar uma foto. Não precisa preencher todas.`;
+  $('photoLimit').textContent=`Seu plano ${p.name} permite até ${maxPhotos} fotos. Clique em cada caixa para adicionar uma foto. Não precisa preencher todas.`;
   state.photos = Array.isArray(state.photos) ? state.photos.filter(Boolean).slice(0,maxPhotos) : [];
   saveState();
   renderSlots(maxPhotos);
@@ -544,10 +544,11 @@ function prepareDetails(){
 function renderSlots(total=planPhotoLimit(state.plan)){
   const photos=Array.isArray(state.photos)?state.photos:[];
   const slotDescriptions=['O início','O sorriso','O momento especial','A lembrança','O abraço','A viagem','A surpresa','A família','A promessa','O final feliz'];
+  state.photoCaptions=Array.isArray(state.photoCaptions)?state.photoCaptions:[];
   $('photoSlots').innerHTML=Array.from({length:total},(_,i)=>{
     const src=photos[i];
-    const desc=slotDescriptions[i]||`Momento ${i+1}`;
-    return `<div class="photo-slot-item"><button type="button" class="slot ${src?'filled':'empty'}" data-slot="${i}">${src?`<img src="${src}" alt="Foto ${i+1} - ${desc}"><span>Foto ${i+1}</span><b class="slot-remove" data-remove="${i}">×</b>`:`<span>+ Foto ${i+1}</span>`}</button><small class="photo-slot-caption">${desc}</small></div>`;
+    const desc=state.photoCaptions[i]||slotDescriptions[i]||`Momento ${i+1}`;
+    return `<div class="photo-slot-item"><button type="button" class="slot ${src?'filled':'empty'}" data-slot="${i}">${src?`<img src="${src}" alt="Foto ${i+1} - ${desc}"><span>Foto ${i+1}</span><b class="slot-remove" data-remove="${i}">×</b>`:`<span>+ Foto ${i+1}</span>`}</button><input class="photo-slot-caption-input" data-caption="${i}" value="${esc(desc)}" maxlength="60" aria-label="Legenda da foto ${i+1}"></div>`;
   }).join('');
   document.querySelectorAll('[data-slot]').forEach(slot=>{
     slot.onclick=(ev)=>{
@@ -557,6 +558,7 @@ function renderSlots(total=planPhotoLimit(state.plan)){
       $('photos').click();
     };
   });
+  document.querySelectorAll('[data-caption]').forEach(input=>{input.onchange=()=>{state.photoCaptions[input.dataset.caption]=input.value.trim()||`Momento ${Number(input.dataset.caption)+1}`;saveState();};});
   document.querySelectorAll('[data-remove]').forEach(btn=>{
     btn.onclick=(ev)=>{
       ev.stopPropagation();
@@ -667,7 +669,7 @@ $('photos').addEventListener('change',async()=>{
     if(rejected>0){
       showModal(
         'Limite do plano',
-        `O plano ${state.plan?.name||''} aceita até ${max} foto(s). ${rejected} foto(s) não foram adicionadas.`
+        `O plano ${state.plan?.name||''} aceita até ${max} fotos. ${rejected} fotos não foram adicionadas.`
       );
     }
   }finally{
@@ -763,7 +765,8 @@ function aiSuggestion(){
   $('letterText').value=suggestion.slice(0,Number(systemSettings.aiMaxCharacters||3000));
   showModal('Texto criado','Criei uma sugestão mais completa. Você pode editar tudo antes de gerar a homenagem.');
 }
-async function buildPreview(){delete document.body.dataset.publicGift;if(!state.recipient)return showModal('Falta informação','Escolha para quem é a homenagem.');if(!state.plan){renderPlans();go('planScreen');return showModal('Escolha o plano','Selecione um plano antes de continuar.');}state.receiverName=$('receiverName').value.trim();state.senderName=$('senderName').value.trim();state.specialDate=$('specialDate').value;state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();state.youtubeLink=$('youtubeLink').value.trim();state.letterText=$('letterText').value.trim();state.primaryColor=$('primaryColor').value;state.secondaryColor=$('secondaryColor').value;state.themeName=selectedTheme().name;state.themeClassName=selectedTheme().className;if(!state.receiverName||!state.senderName||!state.letterText)return showModal('Campos obrigatórios','Preencha quem recebe, quem envia e a carta.');const id=youtubeId(state.youtubeLink);if(state.musicMode==='youtube'&&state.youtubeLink&&!id)return showModal('Link inválido','Cole um link válido do YouTube.');state.youtubeId=state.musicMode==='youtube'?id:'';state.photos=(Array.isArray(state.photos)?state.photos:[]).slice(0,planPhotoLimit(state.plan));saveState();renderPreview();go('previewScreen')}
+async function buildPreview(){delete document.body.dataset.publicGift;if(!state.recipient)return showModal('Falta informação','Escolha para quem é a homenagem.');if(!state.plan){renderPlans();go('planScreen');return showModal('Escolha o plano','Selecione um plano antes de continuar.');}state.receiverName=capitalizeName($('receiverName').value);state.senderName=capitalizeName($('senderName').value);$('receiverName').value=state.receiverName;$('senderName').value=state.senderName;state.specialDate=$('specialDate').value;state.musicMode=$('musicMode').value;state.selectedTrack=currentTrack();state.youtubeLink=$('youtubeLink').value.trim();state.letterText=$('letterText').value.trim();state.primaryColor=$('primaryColor').value;state.secondaryColor=$('secondaryColor').value;state.themeName=selectedTheme().name;state.themeClassName=selectedTheme().className;if(!state.receiverName||!state.senderName||!state.letterText)return showModal('Campos obrigatórios','Preencha quem recebe, quem envia e a carta.');const id=youtubeId(state.youtubeLink);if(state.musicMode==='youtube'&&state.youtubeLink&&!id)return showModal('Link inválido','Cole um link válido do YouTube.');state.youtubeId=state.musicMode==='youtube'?id:'';state.photos=(Array.isArray(state.photos)?state.photos:[]).slice(0,planPhotoLimit(state.plan));saveState();renderPreview();go('previewScreen')}
+function capitalizeName(value){return String(value||'').trim().split(/\s+/).map((part,i)=>{const low=part.toLocaleLowerCase('pt-BR');if(i>0&&['da','de','do','das','dos','e'].includes(low))return low;return low.charAt(0).toLocaleUpperCase('pt-BR')+low.slice(1)}).join(' ')}
 function esc(txt){return String(txt||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function previewProtectionId(){
   const base=[state.tributeId,state.userEmail,state.receiverName,state.senderName,state.specialDate].filter(Boolean).join('|');

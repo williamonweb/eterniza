@@ -28,7 +28,7 @@ export default function PetsPage() {
           <div className="pets-copy">
             <span className="pets-badge">Cada momento merece ser eternizado</span>
             <h1>Fortaleça o vínculo entre sua clínica e cada <em>família.</em></h1>
-            <p>Crie experiências digitais com fotos, música e mensagens para despedidas, cirurgias, recuperações, altas, aniversários, adoções e outros capítulos importantes da vida do pet.</p>
+            <p>Uma plataforma para clínicas veterinárias celebrarem aniversários, adoções, recuperações, altas, momentos especiais e também acolherem despedidas com sensibilidade.</p>
             <div className="pets-actions">
               <a className="primary" href="/pets/cadastro">Cadastrar minha clínica</a>
               <a className="secondary" href="/pets/login">Já tenho acesso</a>

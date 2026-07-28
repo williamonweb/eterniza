@@ -1169,3 +1169,6 @@ body[data-public-gift="true"] .preview-security,body[data-public-gift="true"] .p
 .quick-inspire-modal textarea{width:100%;min-height:125px;background:#120d16!important;border:1px solid #4b3c52!important;color:#fff!important}
 .quick-inspire-modal label small{color:var(--muted);font-weight:700}
 @media(max-width:700px){.letter-main-actions{width:100%;justify-content:stretch}.letter-main-actions button{flex:1}.quick-inspire-grid{grid-template-columns:1fr}.quick-inspire-modal .ai-assistant-actions{flex-direction:column-reverse}.quick-inspire-modal .ai-assistant-actions button{width:100%}}
+
+/* v7.4 refinamentos */
+.photo-slot-caption-input{width:100%;margin-top:8px;padding:9px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#fff;text-align:center;font-size:12px}.preview-security-bar{bottom:76px;width:min(calc(100% - 110px),680px);padding:7px 11px;font-size:11px}.brand-logo{width:min(250px,78%)}@media(max-width:640px){.preview-security-bar{bottom:78px;left:12px;right:82px;transform:none;width:auto;font-size:10px;padding:7px 9px}.brand-logo{width:210px}}

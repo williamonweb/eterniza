@@ -154,7 +154,7 @@ export async function POST(req) {
         {
           ok: false,
           code: 'PHOTO_LIMIT_EXCEEDED',
-          message: `O plano ${plan.name} permite até ${photoLimit} foto(s). Remova as fotos excedentes antes de gerar o PIX.`,
+          message: `O plano ${plan.name} permite até ${photoLimit} fotos. Remova as fotos excedentes antes de gerar o PIX.`,
         },
         { status: 400 }
       );
