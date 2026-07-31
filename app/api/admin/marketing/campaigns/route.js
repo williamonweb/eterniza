@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 import { prisma } from "../../../../../lib/prisma";
 import { getCurrentUser } from "../../../../../lib/auth";
 import { hasAdminPermission } from "../../../../../lib/adminPermissions";
@@ -25,13 +28,20 @@ function payload(body) {
   if (!name || !titleBefore) throw new Error("Informe o nome e o título principal da campanha.");
   if (heroImageUrl.length > 2_000_000) throw new Error("A imagem promocional ficou muito grande. Escolha outra imagem.");
   if (heroImageUrl.startsWith("data:") && !heroImageUrl.startsWith("data:image/")) throw new Error("O arquivo enviado não é uma imagem válida.");
+  const startDate = nullableDate(body.startDate);
+  const endDate = nullableDate(body.endDate);
+  if (startDate && endDate && endDate < startDate) {
+    throw new Error("A data final precisa ser posterior à data inicial.");
+  }
+  const slug = slugify(body.slug || name);
+  if (!slug) throw new Error("Informe um nome válido para gerar o slug da campanha.");
   return {
     name,
-    slug: slugify(body.slug || name),
+    slug,
     type: String(body.type || "CUSTOM").toUpperCase(),
     isActive: Boolean(body.isActive),
-    startDate: nullableDate(body.startDate),
-    endDate: nullableDate(body.endDate),
+    startDate,
+    endDate,
     priority: Math.max(0, Number.parseInt(body.priority || 0, 10) || 0),
     badge: String(body.badge || "").trim() || null,
     titleBefore,
