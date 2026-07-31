@@ -17,7 +17,12 @@ export async function GET() {
       },
       orderBy: [{ priority: "desc" }, { updatedAt: "desc" }],
     });
-    return NextResponse.json({ ok: true, campaign });
+    return NextResponse.json({
+      ok: true,
+      campaign,
+      serverTime: now.toISOString(),
+      timeZone: "America/Sao_Paulo",
+    });
   } catch (error) {
     return NextResponse.json({ ok: false, campaign: null }, { status: 500 });
   }

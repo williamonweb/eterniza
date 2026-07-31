@@ -10,7 +10,16 @@ const EMPTY = {
   bannerButtonText: "Criar agora", bannerButtonLink: "/cadastro", primaryColor: "#efbd52", backgroundColor: ""
 };
 const TYPES = [["CUSTOM","Personalizada"],["FATHERS_DAY","Dia dos Pais"],["MOTHERS_DAY","Dia das Mães"],["VALENTINES_DAY","Dia dos Namorados"],["CHRISTMAS","Natal"],["NEW_YEAR","Ano Novo"],["BLACK_FRIDAY","Black Friday"],["PROMOTION","Promoção"]];
-const dateInput = value => value ? new Date(value).toISOString().slice(0,16) : "";
+const dateInput = value => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+  }).formatToParts(date).reduce((acc, part) => ({ ...acc, [part.type]: part.value }), {});
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+};
 const toForm = item => ({ ...EMPTY, ...item, startDate: dateInput(item.startDate), endDate: dateInput(item.endDate) });
 const formatDate = value => value ? new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "Sem limite";
 

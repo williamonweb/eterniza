@@ -18,9 +18,17 @@ function slugify(value = "") {
 }
 function nullableDate(value) {
   if (!value) return null;
-  const date = new Date(value);
+  const raw = String(value).trim();
+  // datetime-local não inclui fuso. A configuração do Eterniza usa horário de Brasília.
+  const hasTimeZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
+  let normalized = raw;
+  if (!hasTimeZone) {
+    normalized = raw.length === 16 ? `${raw}:00-03:00` : `${raw}-03:00`;
+  }
+  const date = new Date(normalized);
   return Number.isNaN(date.getTime()) ? null : date;
 }
+
 function payload(body) {
   const name = String(body.name || "").trim();
   const titleBefore = String(body.titleBefore || "").trim();
