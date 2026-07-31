@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import SupportAdmin from "../../components/support/SupportAdmin";
 import AdminUsers from "../../components/admin/AdminUsers";
+import AdminCampaigns from "../../components/admin/AdminCampaigns";
 import { getAdminPermissions } from "../../lib/adminPermissions";
 
 const menu = [
@@ -17,6 +18,7 @@ const menu = [
   ["atendimentos", "💬", "Atendimentos"],
   ["usuarios-painel", "👥", "Usuários do painel"],
   ["pets-finance", "R$", "Financeiro Pets"],
+  ["marketing", "✹", "Marketing"],
   ["configuracoes", "⚙", "Configurações"],
 ];
 
@@ -24,7 +26,7 @@ const MENU_PERMISSION = {
   dashboard: "dashboard", homenagens: "tributes", clientes: "clients",
   pagamentos: "payments", planos: "plans", analytics: "analytics",
   cupons: "coupons", pets: "pets", atendimentos: "support",
-  "usuarios-painel": "staff", "pets-finance": "petsFinance", configuracoes: "settings",
+  "usuarios-painel": "staff", "pets-finance": "petsFinance", marketing: "marketing", configuracoes: "settings",
 };
 
 function canOpenMenu(id, permissions) {
@@ -556,6 +558,10 @@ export default function AdminPage() {
             setPaymentEditor={setPaymentEditor}
             saving={savingFinance}
           />
+        )}
+
+        {active === "marketing" && (
+          <AdminCampaigns />
         )}
 
         {active === "configuracoes" && (

@@ -203,6 +203,34 @@ model SystemSetting {
   updatedAt DateTime @updatedAt
 }
 
+model Campaign {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  type            String   @default("CUSTOM")
+  isActive        Boolean  @default(false)
+  startDate       DateTime?
+  endDate         DateTime?
+  priority        Int      @default(0)
+  badge           String?
+  titleBefore     String
+  titleHighlight  String?
+  subtitle        String?  @db.Text
+  buttonText      String   @default("Criar minha homenagem")
+  buttonLink      String   @default("/cadastro")
+  heroImageUrl    String?
+  showTopBanner   Boolean  @default(false)
+  bannerText      String?
+  bannerButtonText String?
+  bannerButtonLink String?
+  primaryColor    String   @default("#efbd52")
+  backgroundColor String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([isActive, startDate, endDate, priority])
+}
+
 model Clinic {
   id                String  @id @default(cuid())
   code              String  @unique
