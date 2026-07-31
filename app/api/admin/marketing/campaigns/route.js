@@ -21,7 +21,10 @@ function nullableDate(value) {
 function payload(body) {
   const name = String(body.name || "").trim();
   const titleBefore = String(body.titleBefore || "").trim();
+  const heroImageUrl = String(body.heroImageUrl || "").trim();
   if (!name || !titleBefore) throw new Error("Informe o nome e o título principal da campanha.");
+  if (heroImageUrl.length > 2_000_000) throw new Error("A imagem promocional ficou muito grande. Escolha outra imagem.");
+  if (heroImageUrl.startsWith("data:") && !heroImageUrl.startsWith("data:image/")) throw new Error("O arquivo enviado não é uma imagem válida.");
   return {
     name,
     slug: slugify(body.slug || name),
@@ -36,7 +39,7 @@ function payload(body) {
     subtitle: String(body.subtitle || "").trim() || null,
     buttonText: String(body.buttonText || "Criar minha homenagem").trim(),
     buttonLink: String(body.buttonLink || "/cadastro").trim(),
-    heroImageUrl: String(body.heroImageUrl || "").trim() || null,
+    heroImageUrl: heroImageUrl || null,
     showTopBanner: Boolean(body.showTopBanner),
     bannerText: String(body.bannerText || "").trim() || null,
     bannerButtonText: String(body.bannerButtonText || "").trim() || null,

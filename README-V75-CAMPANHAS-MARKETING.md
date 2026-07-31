@@ -54,3 +54,17 @@ O campo de imagem aceita caminho público do próprio projeto, por exemplo:
 `/eterniza/assets/campanhas/dia-dos-pais.jpg`
 
 Também aceita uma URL HTTPS externa. O módulo não adiciona um novo serviço de upload para evitar interferir no fluxo de uploads já existente.
+
+
+## Atualização: upload de imagem promocional
+
+O editor de campanhas agora possui upload direto da imagem do hero:
+
+- clique para selecionar ou arraste a imagem;
+- aceita JPG, PNG e WEBP de até 12 MB;
+- redimensiona para no máximo 1800 x 1200;
+- converte e comprime automaticamente em WEBP;
+- mostra prévia;
+- permite trocar ou remover antes de salvar.
+
+A imagem otimizada é armazenada no próprio registro da campanha, sem exigir Cloudinary, Supabase Storage ou Vercel Blob.
