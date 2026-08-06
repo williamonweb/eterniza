@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import SupportAdmin from "../../components/support/SupportAdmin";
 import AdminUsers from "../../components/admin/AdminUsers";
 import AdminCampaigns from "../../components/admin/AdminCampaigns";
+import AdminReports from "../../components/reports/AdminReports";
 import { getAdminPermissions } from "../../lib/adminPermissions";
 
 const menu = [
@@ -13,6 +14,7 @@ const menu = [
   ["pagamentos", "◆", "Pagamentos"],
   ["planos", "✦", "Planos e promoções"],
   ["analytics", "⌁", "Analytics"],
+  ["relatorios", "▤", "Relatórios"],
   ["cupons", "◇", "Cupons"],
   ["pets", "🐾", "Eterniza Pets"],
   ["atendimentos", "💬", "Atendimentos"],
@@ -25,7 +27,7 @@ const menu = [
 const MENU_PERMISSION = {
   dashboard: "dashboard", homenagens: "tributes", clientes: "clients",
   pagamentos: "payments", planos: "plans", analytics: "analytics",
-  cupons: "coupons", pets: "pets", atendimentos: "support",
+  cupons: "coupons", relatorios: "analytics", pets: "pets", atendimentos: "support",
   "usuarios-painel": "staff", "pets-finance": "petsFinance", marketing: "marketing", configuracoes: "settings",
 };
 
@@ -515,6 +517,10 @@ export default function AdminPage() {
 
         {active === "analytics" && (
           <Analytics data={data} />
+        )}
+
+        {active === "relatorios" && (
+          <AdminReports />
         )}
 
         {active === "cupons" && (

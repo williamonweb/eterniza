@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import PetStoryExperience from "../../../components/pets/PetStoryExperience";
+import PetReports from "../../../components/reports/PetReports";
 import { EXPERIENCE_TYPES, buildPetStory, getStoryDefaults, getStoryQuestions } from "../../../lib/pets/story-engine";
 
 const NAV_ITEMS = [
@@ -167,7 +168,7 @@ export default function PetsPanelPage() {
             >
               <span>{icon}</span>
               <b>{label}</b>
-              {id === "reports" && <em>Em breve</em>}
+
             </button>
           ))}
         </nav>
@@ -265,11 +266,7 @@ export default function PetsPanelPage() {
         )}
 
         {active === "reports" && (
-          <ComingSoon
-            section={active}
-            title={sectionTitle}
-            onBack={() => navigate("dashboard")}
-          />
+          <PetReports />
         )}
 
         {notice && (
