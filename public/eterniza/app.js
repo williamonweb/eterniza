@@ -791,9 +791,14 @@ function renderPreview(){
   if(carouselTimer) clearInterval(carouselTimer);
   const r=state.recipient, p=state.plan, c=diff(state.specialDate), showMoments=!!(state.specialDate&&c);
   const dateLabel=state.specialDate?new Date(state.specialDate+'T00:00:00').toLocaleDateString('pt-BR'):'';
-  const photoList=(state.photos||[]).filter(Boolean);
+  const photoList=(state.photos||[]).map((src,originalIndex)=>({src,originalIndex})).filter(item=>Boolean(item.src));
   const storyLines=getStoryLines(r.id,state.receiverName,state.senderName);
-  const frames=photoList.map((src,i)=>`<div class="story-frame ${i===0?'active':''}" data-cine="${i}"><img src="${src}" alt="Foto ${i+1}"><span>${storyCaption(r.id,i)}</span></div>`).join('');
+  const captions=Array.isArray(state.photoCaptions)?state.photoCaptions:[];
+  const frames=photoList.map(({src,originalIndex},i)=>{
+    const customCaption=String(captions[originalIndex]||'').trim();
+    const caption=customCaption||storyCaption(r.id,originalIndex);
+    return `<div class="story-frame ${i===0?'active':''}" data-cine="${i}"><img src="${src}" alt="Foto ${i+1} - ${esc(caption)}"><span>${esc(caption)}</span></div>`;
+  }).join('');
   const theme=selectedTheme();
   $('giftPreview').className=`gift-preview storytelling ${theme.className}`;
   $('giftPreview').style.setProperty('--p',state.primaryColor||'#ff4f9a');
