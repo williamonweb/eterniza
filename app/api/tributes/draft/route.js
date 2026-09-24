@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "../../../../lib/auth";
 import { prisma } from "../../../../lib/prisma";
 import { makeSlug } from "../../../../lib/slug";
-import { getPlanBySlug } from "../../../../lib/asaas";
+import { getPlanBySlug, getPlans } from "../../../../lib/asaas";
+import { randomBytes, randomUUID } from "node:crypto";
+import { hashPassword } from "../../../../lib/password";
+import { grantGuestAccess, hasGuestAccess } from "../../../../lib/normal/guestAccess";
+
+export const dynamic = "force-dynamic";
 
 function normalizeDate(value) {
   if (!value) return null;
@@ -39,40 +44,46 @@ function toLegacyTribute(tribute, user) {
   };
 }
 
+export async function GET(req) {
+  const user = await getCurrentUser();
+  const id = new URL(req.url).searchParams.get("id");
+  if (!id) return NextResponse.json({ ok: false, message: "Página não informada." }, { status: 400 });
+  const tribute = await prisma.tribute.findUnique({ where: { id }, include: { user: { select: { email: true } } } });
+  if (!tribute || (tribute.userId !== user?.id && !hasGuestAccess(tribute))) return NextResponse.json({ ok: false, message: "Página não encontrada neste navegador." }, { status: 404 });
+  return NextResponse.json({ ok: true, tribute: toLegacyTribute(tribute, user) });
+}
+
 export async function POST(req) {
   try {
     const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ ok: false, message: "Sessão expirada. Entre novamente." }, { status: 401 });
-    }
 
     const body = await req.json();
     const content = body.content || {};
     const tributeId = body.tributeId || content.tributeId || null;
     const receiver = String(content.receiverName || body.receiverName || "").trim();
     const sender = String(content.senderName || body.senderName || "").trim();
-    const title = receiver || "Homenagem sem título";
+    const title = String(content.title || receiver || "Página sem título").trim().slice(0, 160);
     const category = content.recipient?.id || body.category || null;
     const requestedPlan = content.plan || {};
     const planSlug = String(requestedPlan.slug || requestedPlan.id || '').trim().toLowerCase();
     const plan = planSlug ? await getPlanBySlug(planSlug) : null;
     const photos = Array.isArray(content.photos) ? content.photos.filter(Boolean) : [];
 
-    if (!plan) {
+    if (planSlug && !plan) {
       return NextResponse.json({ ok: false, message: "Escolha um plano válido antes de salvar a homenagem." }, { status: 400 });
     }
 
-    const photoLimit = Number(plan.photos || 0);
+    const photoLimit = plan ? Number(plan.photos || 0) : Math.max(0, ...(await getPlans()).map(item => Number(item.photos || 0)));
     if (!photoLimit || photos.length > photoLimit) {
       return NextResponse.json(
-        { ok: false, message: `O plano ${plan.name} permite até ${photoLimit} fotos.` },
+        { ok: false, message: plan ? `O plano ${plan.name} permite até ${photoLimit} fotos.` : `É possível adicionar até ${photoLimit} fotos.` },
         { status: 400 }
       );
     }
 
     const normalizedContent = {
       ...content,
-      plan: {
+      plan: plan ? {
         ...requestedPlan,
         id: plan.slug || requestedPlan.id,
         slug: plan.slug || requestedPlan.slug || requestedPlan.id,
@@ -80,7 +91,7 @@ export async function POST(req) {
         cents: Math.round(Number(plan.price || 0) * 100),
         photos: photoLimit,
         duration: plan.duration || requestedPlan.duration,
-      },
+      } : null,
       photos,
     };
 
@@ -97,18 +108,22 @@ export async function POST(req) {
       receiverName: receiver || null,
       senderName: sender || null,
       specialDate: normalizeDate(content.specialDate),
-      planId: plan.slug || requestedPlan.id || null,
-      planName: plan.name || null,
-      planPriceCents: Math.round(Number(plan.price || 0) * 100),
+      planId: plan?.slug || null,
+      planName: plan?.name || null,
+      planPriceCents: Math.round(Number(plan?.price || 0) * 100),
       music,
       content: normalizedContent,
     };
 
     let tribute = null;
+    let ownerId = user?.id;
 
     if (tributeId) {
-      tribute = await prisma.tribute.findFirst({ where: { id: tributeId, userId: user.id } });
+      tribute = await prisma.tribute.findUnique({ where: { id: tributeId }, include: { user: { select: { email: true } } } });
+      if (tribute && tribute.userId !== user?.id && !hasGuestAccess(tribute)) tribute = null;
+      if (tribute?.status === "PUBLISHED") return NextResponse.json({ ok: false, message: "Uma página publicada não pode ser alterada como rascunho." }, { status: 409 });
       if (tribute) {
+        ownerId = tribute.userId;
         tribute = await prisma.tribute.update({
           where: { id: tribute.id },
           data,
@@ -116,7 +131,17 @@ export async function POST(req) {
       }
     }
 
+    if (tributeId && !tribute) return NextResponse.json({ ok: false, message: "Rascunho não encontrado nesta conta." }, { status: 404 });
     if (!tribute) {
+      if (!ownerId) {
+        const guest = await prisma.user.create({ data: {
+          name: "Visitante Eterniza",
+          email: `guest-${randomUUID()}@guest.eternizas.invalid`,
+          password: await hashPassword(randomBytes(32).toString('hex')),
+          role: "CLIENT",
+        } });
+        ownerId = guest.id;
+      }
       const slug = makeUniqueSlug(receiver || sender || title);
       tribute = await prisma.tribute.create({
         data: {
@@ -124,12 +149,13 @@ export async function POST(req) {
           slug,
           status: "DRAFT",
           publicUrl: `/presente/${slug}`,
-          userId: user.id,
+          userId: ownerId,
         },
       });
     }
 
-    return NextResponse.json({ ok: true, tribute: toLegacyTribute(tribute, user) });
+    const response = NextResponse.json({ ok: true, tribute: toLegacyTribute(tribute, user) });
+    return user?.id === ownerId ? response : grantGuestAccess(response, tribute);
   } catch (err) {
     return NextResponse.json({ ok: false, message: err.message || "Erro ao salvar homenagem." }, { status: 500 });
   }

@@ -1,3 +1,3 @@
-export default function Page() {
-  return <iframe src="/eterniza/index.html?route=landing&section=perguntas" style={{border:0,width:'100vw',height:'100vh',display:'block'}} />;
-}
+import Shell from '../../components/normal/Shell';
+const faq=[['Preciso criar tudo de uma vez?','Não. A página é salva automaticamente na sua conta. Você pode sair e continuar depois em Minhas páginas.'],['Posso ver antes de pagar?','Sim. Você visualiza a página completa antes de escolher um plano.'],['A música toca sozinha?','A pessoa pode dar play na música do YouTube diretamente na página.'],['Quando minha página fica disponível?','Depois que o pagamento PIX for confirmado, você recebe o link para compartilhar.'],['Eterniza Pets faz parte dessa criação?','O Eterniza Pets para clínicas veterinárias é um módulo separado. Aqui você pode celebrar seu pet em uma página pessoal.']];
+export default function Page(){return <Shell compact><span className="normal-kicker">Ajuda</span><h1 className="normal-heading">Perguntas frequentes</h1>{faq.map(([question,answer])=><details className="normal-card" key={question} style={{marginBottom:12}}><summary style={{cursor:'pointer',fontSize:19,fontWeight:700}}>{question}</summary><p style={{color:'#766b60'}}>{answer}</p></details>)}<a className="normal-button" href="/criar">Criar página →</a></Shell>;}

@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { getCurrentUser } from "../../../../lib/auth";
-import { createAsaasPixPayment, getPlanBySlug } from "../../../../lib/asaas";
+import { createAsaasPixPayment, getPlanBySlug, getAsaasPayment, getAsaasPixQrCode } from "../../../../lib/asaas";
+import { hasGuestAccess } from "../../../../lib/normal/guestAccess";
+
+export const dynamic = "force-dynamic";
 
 function onlyDigits(value) {
   return String(value || "").replace(/\D/g, "");
@@ -73,23 +76,28 @@ export async function POST(req) {
   try {
     const user = await getCurrentUser();
 
-    if (!user) {
-      return NextResponse.json({ ok: false, message: "Não autenticado." }, { status: 401 });
-    }
-
     const body = await req.json().catch(() => ({}));
     const tributeId = String(body.tributeId || "");
     const requestedPlanSlug = String(body.plan || "").trim().toLowerCase();
     const cpfFromBody = onlyDigits(body.cpfCnpj || body.cpf || "");
+    const payerEmail = String(body.email || "").trim().toLowerCase();
+    const payerName = String(body.name || "").trim().slice(0, 120);
     const couponCode = normalizeCouponCode(body.couponCode || body.coupon || "");
 
     if (!tributeId) {
       return NextResponse.json({ ok: false, message: "Homenagem não informada." }, { status: 400 });
     }
 
-    const dbUser = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { id: true, name: true, email: true, cpf: true },
+    const tribute = await prisma.tribute.findUnique({ where: { id: tributeId }, include: { user: { select: { email: true } } } });
+    if (!tribute || (tribute.userId !== user?.id && !hasGuestAccess(tribute))) {
+      return NextResponse.json({ ok: false, message: "Página não encontrada neste navegador." }, { status: 404 });
+    }
+    const guest = tribute.user.email.endsWith('@guest.eternizas.invalid');
+    if (guest && (!payerName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payerEmail))) {
+      return NextResponse.json({ ok: false, message: "Informe seu nome e e-mail para gerar o PIX." }, { status: 400 });
+    }
+    const dbUser = guest ? { id: tribute.userId, name: payerName, email: payerEmail, cpf: null } : await prisma.user.findUnique({
+      where: { id: tribute.userId }, select: { id: true, name: true, email: true, cpf: true },
     });
 
     if (!dbUser) {
@@ -109,15 +117,7 @@ export async function POST(req) {
       );
     }
 
-    const tribute = await prisma.tribute.findFirst({
-      where: { id: tributeId, userId: user.id },
-    });
-
-    if (!tribute) {
-      return NextResponse.json({ ok: false, message: "Homenagem não encontrada." }, { status: 404 });
-    }
-
-    if (cpfCnpj && cpfCnpj !== onlyDigits(dbUser.cpf || "")) {
+    if (!guest && cpfCnpj && cpfCnpj !== onlyDigits(dbUser.cpf || "")) {
       await prisma.user.update({
         where: { id: user.id },
         data: { cpf: cpfCnpj },
@@ -158,6 +158,25 @@ export async function POST(req) {
         },
         { status: 400 }
       );
+    }
+
+    if (tribute.status === 'PUBLISHED') {
+      return NextResponse.json({ ok: false, message: 'Esta página já foi publicada.' }, { status: 409 });
+    }
+    const existingPending = await prisma.payment.findFirst({ where: { tributeId: tribute.id, status: 'PENDING' }, orderBy: { createdAt: 'desc' } });
+    if (existingPending?.mercadoPagoId) {
+      const charge = await getAsaasPayment(existingPending.mercadoPagoId);
+      if (charge.status === 'PENDING') {
+        const qr = await getAsaasPixQrCode(existingPending.mercadoPagoId);
+        return NextResponse.json({ ok: true, provider: 'asaas', payment: {
+          asaasId: existingPending.mercadoPagoId,
+          qrCode: qr.payload || qr.pixCopiaECola || null,
+          qrCodeBase64: qr.encodedImage || qr.qrCodeBase64 || null,
+        } });
+      }
+      if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(charge.status)) {
+        return NextResponse.json({ ok: false, message: 'O PIX já foi pago. Reabra esta página para ver o resultado.' }, { status: 409 });
+      }
     }
 
     let coupon = null;
@@ -201,7 +220,7 @@ export async function POST(req) {
         const alreadyUsed = await prisma.payment.findFirst({
           where: {
             couponId: coupon.id,
-            tribute: { userId: user.id },
+            tribute: { userId: tribute.userId },
             status: { in: ["PENDING", "APPROVED", "RECEIVED", "CONFIRMED"] },
           },
           select: { id: true },
@@ -224,6 +243,10 @@ export async function POST(req) {
       cents: pricing.finalPriceCents,
       price: pricing.finalPriceCents / 100,
     };
+
+    if (guest) {
+      await prisma.user.update({ where: { id: tribute.userId }, data: { name: payerName, notes: payerEmail } });
+    }
 
     const asaasResult = await createAsaasPixPayment({
       tributeId: tribute.id,

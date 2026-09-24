@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { getCurrentUser } from "../../../../lib/auth";
 import { getAsaasPayment } from "../../../../lib/asaas";
+import { hasGuestAccess } from "../../../../lib/normal/guestAccess";
+
+export const dynamic = "force-dynamic";
 
 function normalizeAsaasStatus(status) {
   const normalized = String(status || "").toUpperCase();
@@ -15,10 +18,6 @@ export async function GET(req) {
   try {
     const user = await getCurrentUser();
 
-    if (!user) {
-      return NextResponse.json({ ok: false, message: "Não autenticado." }, { status: 401 });
-    }
-
     const url = new URL(req.url);
     const asaasId = String(url.searchParams.get("asaasId") || url.searchParams.get("paymentId") || "").trim();
     const tributeId = String(url.searchParams.get("tributeId") || "").trim();
@@ -31,11 +30,11 @@ export async function GET(req) {
       where: asaasId
         ? { mercadoPagoId: asaasId }
         : { tributeId },
-      include: { tribute: true },
+      include: { tribute: { include: { user: { select: { email: true } } } } },
       orderBy: { createdAt: "desc" },
     });
 
-    if (!existingPayment || existingPayment.tribute.userId !== user.id) {
+    if (!existingPayment || (existingPayment.tribute.userId !== user?.id && !hasGuestAccess(existingPayment.tribute))) {
       return NextResponse.json({ ok: false, message: "Pagamento não encontrado." }, { status: 404 });
     }
 

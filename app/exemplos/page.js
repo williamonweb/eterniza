@@ -1,3 +1,3 @@
-export default function Page() {
-  return <iframe src="/eterniza/index.html?route=landing&section=exemplos" style={{border:0,width:'100vw',height:'100vh',display:'block'}} />;
-}
+import Shell from '../../components/normal/Shell';
+import {categories} from '../../lib/normal/categories';
+export default function Page(){return <Shell><span className="normal-kicker">Encontre inspiração</span><h1 className="normal-heading">Uma página para cada momento</h1><p className="normal-subtitle">A sua história ganha um visual próprio conforme o momento que você escolhe.</p><div className="normal-grid" style={{marginTop:32}}>{categories.map(cat=><a key={cat.id} className="normal-category" href="/criar"><img src={cat.image} alt=""/><div><strong>{cat.icon} {cat.label}</strong><small>{cat.subtitle}</small></div></a>)}</div></Shell>;}

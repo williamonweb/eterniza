@@ -1,188 +1,22 @@
-"use client";
+'use client';
 import { useEffect, useState } from 'react';
-
-export default function Home() {
-  const [mounted, setMounted] = useState(false);
-  const [plans, setPlans] = useState([]);
-  const [campaign, setCampaign] = useState(null);
-  const [settings, setSettings] = useState({
-    companyName: "Eterniza",
-    slogan: "Onde Cada História Vive Para Sempre.",
-    logoUrl: "/eterniza/assets/brand/logo-eterniza.png",
-    landingBadge: "⭐ Experiência cinematográfica",
-    landingTitleBefore: "Transforme fotos, música e palavras em uma",
-    landingTitleHighlight: "homenagem inesquecível.",
-    landingSubtitle: "A pessoa recebe um link, clica em abrir surpresa e vive uma experiência emocionante, com fotos, música, carta, bodas, momentos especiais e QR Code.",
-    promoBannerEnabled: false,
-    promoBannerText: "",
-    landingShowExamples: true,
-    landingShowPlans: true,
-    landingShowProof: true,
-  });
-
-  useEffect(() => {
-    setMounted(true);
-    Promise.all([
-      fetch('/api/plans', { cache: 'no-store' }).then(res => res.json()),
-      fetch('/api/settings', { cache: 'no-store' }).then(res => res.json()),
-      fetch('/api/marketing/campaign', { cache: 'no-store' }).then(res => res.json()),
-    ])
-      .then(([plansData, settingsData, campaignData]) => {
-        if (plansData?.ok && Array.isArray(plansData.plans)) setPlans(plansData.plans);
-        if (settingsData?.ok && settingsData.settings) {
-          setSettings((current) => ({ ...current, ...settingsData.settings }));
-        }
-        if (campaignData?.ok && campaignData.campaign) setCampaign(campaignData.campaign);
-      })
-      .catch(() => {});
-  }, []);
-
-  const fallbackPlans = [
-    { slug: 'essencial', name: 'Essencial', priceCents: 1990, photos: 2, duration: '1 mês', description: 'Uma homenagem simples e emocionante.' },
-    { slug: 'premium', name: 'Premium', priceCents: 3990, photos: 10, duration: 'vitalício', description: 'A experiência completa mais escolhida.' },
-    { slug: 'eterno', name: 'Eterno', priceCents: 6990, photos: 20, duration: 'vitalício', description: 'Para eternizar cada detalhe para sempre.' }
-  ];
-  const visiblePlans = plans.length ? plans : fallbackPlans;
-  const hero = campaign ? {
-    badge: campaign.badge || settings.landingBadge,
-    titleBefore: campaign.titleBefore || settings.landingTitleBefore,
-    titleHighlight: campaign.titleHighlight || "",
-    subtitle: campaign.subtitle || settings.landingSubtitle,
-    buttonText: campaign.buttonText || "Criar minha homenagem",
-    buttonLink: campaign.buttonLink || "/cadastro",
-    image: campaign.heroImageUrl || "/eterniza/assets/brand/hero-couple.jpg",
-    color: campaign.primaryColor || "#efbd52",
-  } : { badge: settings.landingBadge, titleBefore: settings.landingTitleBefore, titleHighlight: settings.landingTitleHighlight, subtitle: settings.landingSubtitle, buttonText: "Criar minha homenagem", buttonLink: "/cadastro", image: "/eterniza/assets/brand/hero-couple.jpg", color: "#efbd52" };
-  const money = cents => (Number(cents || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  if (!mounted) return <main style={{minHeight:'100vh',background:'#030606'}} />;
-  return (
-    <main className="et-landing" style={{"--campaign-color": hero.color}}>
-      <style>{`
-        .et-promo-banner{max-width:1560px;margin:0 auto 12px;border:1px solid rgba(239,189,82,.32);background:linear-gradient(90deg,rgba(201,147,55,.18),rgba(247,220,130,.08));color:#ffe7a7;border-radius:12px;padding:11px 18px;text-align:center;font-weight:1000}.et-landing{min-height:100vh;background:radial-gradient(circle at 58% 14%,rgba(239,191,88,.18),transparent 23%),linear-gradient(90deg,#030606 0%,#061017 48%,#030504 100%);color:#fff;padding:28px 42px 34px;font-family:Inter,Segoe UI,Arial,sans-serif;overflow:hidden}.et-wrap{max-width:1560px;margin:0 auto}.et-nav{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin-bottom:18px}.et-brand{display:flex;align-items:center;text-decoration:none;color:inherit}.et-brand img{width:280px;height:180px;object-fit:contain;filter:drop-shadow(0 0 26px rgba(239,189,82,.18))}.et-brand strong,.et-brand span{display:none}.et-menu{display:flex;gap:34px;align-items:center;padding-top:20px}.et-menu a{color:#fff;text-decoration:none;font-weight:800;opacity:.92}.et-menu a:hover{color:#efbd52}.et-actions{display:flex;gap:12px;padding-top:12px}.et-btn{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 25px;border-radius:12px;text-decoration:none;font-weight:1000;border:1px solid rgba(239,189,82,.42);color:#fff;background:rgba(255,255,255,.05);cursor:pointer;font-family:inherit}.et-btn.gold{background:linear-gradient(135deg,#c99337,#f5d579);color:#130f08;border:0;box-shadow:0 16px 45px rgba(239,189,82,.18)}.et-hero{display:grid;grid-template-columns:minmax(420px,570px) minmax(700px,1fr);gap:20px;align-items:stretch;position:relative}.et-copy{position:relative;z-index:4;padding-top:44px}.et-badge{display:inline-flex;align-items:center;gap:8px;text-transform:uppercase;color:#efbd52;font-weight:1000;border:1px solid rgba(239,189,82,.34);background:rgba(255,255,255,.045);border-radius:999px;padding:10px 17px;margin-bottom:22px}.et-copy h1{font-family:Georgia,'Times New Roman',serif;font-size:clamp(56px,5vw,82px);line-height:.92;letter-spacing:-2px;margin:0 0 24px;color:#fff8ef;text-shadow:0 25px 80px rgba(0,0,0,.75)}.et-copy h1 em{font-style:normal;color:#e4ad43}.et-copy p{font-size:20px;line-height:1.5;color:#fff2df;max-width:640px;margin:0}.et-cta{display:flex;gap:18px;flex-wrap:wrap;margin-top:31px}.et-cta .et-btn{min-width:260px;height:60px;font-size:17px}.et-cta .et-btn:not(.gold){min-width:220px;background:rgba(0,0,0,.26)}.et-visual{min-height:565px;position:relative;overflow:visible}.et-visual:before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(2,6,6,.02),rgba(2,6,6,0) 30%,rgba(2,6,6,.55) 73%,rgba(2,6,6,.86));z-index:2;pointer-events:none}.et-visual.has-campaign:before{display:none}.et-couple{position:absolute;left:-42px;top:-8px;width:82%;height:630px;object-fit:cover;object-position:center;filter:saturate(1.03) contrast(1.04) brightness(.96);mask-image:linear-gradient(90deg,transparent 0%,black 12%,black 84%,transparent 100%);-webkit-mask-image:linear-gradient(90deg,transparent 0%,black 12%,black 84%,transparent 100%)}.et-campaign-panel{position:absolute;inset:0;z-index:3;border-radius:28px;overflow:hidden;border:1px solid color-mix(in srgb,var(--campaign-color) 48%,transparent);background:#080b0d;box-shadow:0 30px 100px rgba(0,0,0,.62)}.et-campaign-panel img{display:block;width:100%;height:100%;min-height:565px;object-fit:cover;object-position:center}.et-campaign-panel:after{content:"";position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}.et-demo{position:absolute;z-index:3;right:0;top:86px;width:min(410px,43%);padding:28px 28px 30px;border-radius:28px;background:rgba(2,7,8,.84);border:1px solid rgba(239,189,82,.45);box-shadow:0 30px 100px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.05);text-align:center}.et-demo h3{font-family:Georgia,'Times New Roman',serif;font-size:43px;line-height:1;margin:0 0 12px;color:#fff8ef}.et-demo p{font-size:18px;color:#f3c75d;margin:0 0 24px}.et-stack{height:190px;position:relative;display:grid;place-items:center;margin-bottom:22px;perspective:800px}.et-stack img{width:250px;height:156px;object-fit:cover;border-radius:17px;border:1px solid rgba(255,255,255,.2);position:relative;z-index:2;box-shadow:0 18px 60px rgba(0,0,0,.45)}.et-stack span{position:absolute;width:130px;height:104px;top:43px;border-radius:14px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.12)}.et-stack span:nth-of-type(1){left:4px;transform:rotateY(28deg) scale(.9);opacity:.62}.et-stack span:nth-of-type(2){right:4px;transform:rotateY(-28deg) scale(.9);opacity:.62}.et-demo .et-btn{width:100%;height:62px;border-radius:999px;font-size:20px;box-sizing:border-box}.et-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:24px}.et-card{border-radius:12px;border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.36);overflow:hidden;text-decoration:none;color:#fff;min-height:244px}.et-card img{display:block;width:100%;height:128px;object-fit:cover}.et-card b{display:block;font-family:Georgia,'Times New Roman',serif;font-size:24px;margin:18px 22px 8px}.et-card span{display:block;font-size:18px;line-height:1.36;color:#eee6d8;margin:0 22px 22px}.et-proof{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);border-radius:12px;padding:16px}.et-proof div{display:flex;gap:12px;align-items:center;justify-content:center}.et-proof strong{display:block;font-size:18px}.et-proof span{display:block;color:#d5d1ca;font-size:15px;margin-top:4px}.et-plans{margin-top:26px;padding:34px;border:1px solid rgba(239,189,82,.18);border-radius:22px;background:rgba(255,255,255,.035)}.et-plans-head{text-align:center;margin-bottom:24px}.et-plans-head span{color:#efbd52;font-weight:1000;text-transform:uppercase;letter-spacing:.08em}.et-plans-head h2{font-family:Georgia,'Times New Roman',serif;font-size:42px;margin:8px 0 0;color:#fff8ef}.et-plan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.et-plan{padding:26px;border-radius:18px;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.28);position:relative}.et-plan.featured{border-color:rgba(239,189,82,.58);box-shadow:0 18px 50px rgba(239,189,82,.10)}.et-plan h3{font-family:Georgia,'Times New Roman',serif;font-size:28px;margin:0 0 8px;color:#fff8ef}.et-plan-price{font-size:34px;font-weight:1000;color:#efbd52}.et-plan p{color:#e5dccd;line-height:1.45}.et-plan small{display:block;color:#f5d98f;font-weight:800;margin-top:12px}@media(max-width:1180px){.et-menu{display:none}.et-hero{grid-template-columns:1fr}.et-visual{min-height:650px}.et-couple{width:100%;height:650px;mask-image:linear-gradient(180deg,black 0%,black 76%,transparent 100%);-webkit-mask-image:linear-gradient(180deg,black 0%,black 76%,transparent 100%)}.et-campaign-panel img{min-height:650px}.et-demo{right:50%;transform:translateX(50%);width:min(430px,92%);top:130px}.et-cards,.et-proof{grid-template-columns:repeat(2,1fr)}.et-plan-grid{grid-template-columns:1fr}}
-.et-pets-feature{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,390px);align-items:center;gap:34px;margin:28px 0;padding:34px 42px;border-radius:30px;overflow:hidden;border:1px solid rgba(92,174,255,.34);background:radial-gradient(circle at 78% 25%,rgba(92,174,255,.2),transparent 34%),linear-gradient(135deg,#07131d,#071c2d 56%,#051018);box-shadow:0 30px 90px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.04)}
-.et-pets-feature:before{content:"";position:absolute;inset:0;background:linear-gradient(110deg,rgba(255,255,255,.025),transparent 35%);pointer-events:none}
-.et-pets-copy{position:relative;z-index:2;max-width:760px}
-.et-pets-new{display:inline-flex;align-items:center;gap:8px;padding:8px 13px;border-radius:999px;background:rgba(92,174,255,.13);border:1px solid rgba(92,174,255,.3);color:#9fd2ff;font-size:12px;font-weight:1000;text-transform:uppercase;letter-spacing:.08em}
-.et-pets-copy h2{font-family:Georgia,'Times New Roman',serif;font-size:clamp(38px,4vw,64px);line-height:.98;margin:18px 0 14px;color:#f5fbff}
-.et-pets-copy h2 em{font-style:normal;color:#73bcff}
-.et-pets-copy p{max-width:680px;margin:0;color:#c7ddeb;font-size:18px;line-height:1.6}
-.et-pets-points{display:flex;gap:12px;flex-wrap:wrap;margin:22px 0}
-.et-pets-points span{padding:9px 13px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:#deefff;font-size:13px;font-weight:850}
-.et-pets-btn{display:inline-flex;align-items:center;justify-content:center;min-height:56px;padding:0 26px;border-radius:14px;text-decoration:none;background:linear-gradient(135deg,#277ed4,#76c2ff);color:#03111d;font-weight:1000;box-shadow:0 16px 42px rgba(39,126,212,.3);transition:transform .2s ease,box-shadow .2s ease}
-.et-pets-btn:hover{transform:translateY(-3px);box-shadow:0 20px 52px rgba(39,126,212,.42)}
-.et-pets-image{position:relative;z-index:2;display:grid;place-items:center;min-height:270px}
-.et-pets-image:before{content:"";position:absolute;width:270px;height:270px;border-radius:50%;background:radial-gradient(circle,rgba(118,194,255,.2),transparent 68%);filter:blur(4px)}
-.et-pets-image img{position:relative;width:min(100%,350px);max-height:320px;object-fit:contain;filter:drop-shadow(0 24px 36px rgba(0,0,0,.44))}
-@media(max-width:920px){.et-pets-feature{grid-template-columns:1fr;text-align:center;padding:30px}.et-pets-copy{margin:auto}.et-pets-points{justify-content:center}.et-pets-image{min-height:230px;order:-1}.et-pets-image img{max-height:250px}}
-@media(max-width:720px){.et-landing{padding:18px}.et-nav{align-items:flex-start}.et-brand img{width:190px;height:124px}.et-actions{flex-direction:column}.et-copy h1{font-size:46px;letter-spacing:-1px}.et-cta{flex-direction:column}.et-cta .et-btn{width:100%;min-width:0}.et-visual{min-height:540px}.et-couple{height:540px}.et-demo{top:110px;padding:22px}.et-cards,.et-proof{grid-template-columns:1fr}.et-proof div{justify-content:flex-start}}
-.et-landing[style] .et-badge,.et-landing[style] .et-copy h1 em{color:var(--campaign-color)}.et-landing[style] .et-badge{border-color:color-mix(in srgb,var(--campaign-color) 42%,transparent)}.et-landing[style] .et-btn.gold{background:linear-gradient(135deg,color-mix(in srgb,var(--campaign-color) 78%,#7a541c),color-mix(in srgb,var(--campaign-color) 72%,#fff))}
-      `}</style>
-      {campaign?.showTopBanner && campaign?.bannerText ? (
-        <div className="et-promo-banner">{campaign.bannerText}{campaign.bannerButtonText && <a href={campaign.bannerButtonLink || campaign.buttonLink || "/cadastro"} style={{marginLeft:12,color:"inherit",fontWeight:1000}}>{campaign.bannerButtonText} →</a>}</div>
-      ) : settings.promoBannerEnabled && settings.promoBannerText ? (
-        <div className="et-promo-banner">{settings.promoBannerText}</div>
-      ) : null}
-      <div className="et-wrap">
-        <nav className="et-nav">
-          <a className="et-brand" href="/">
-            <img src={settings.logoUrl || "/eterniza/assets/brand/logo-eterniza.png"} alt={settings.companyName || "Eterniza"} />
-          </a>
-          <div className="et-menu">
-            <a href="/como-funciona">Como funciona</a>
-            <a href="/exemplos">Exemplos</a>
-            <a href="/planos">Planos</a>
-            <a href="/perguntas">Perguntas</a>
-          </div>
-          <div className="et-actions">
-            <a className="et-btn" href="/login">Entrar</a>
-            <a className="et-btn gold" href="/cadastro">Criar minha homenagem</a>
-          </div>
-        </nav>
-
-        <section className="et-hero">
-          <div className="et-copy">
-            <span className="et-badge">{hero.badge}</span>
-            <h1>{hero.titleBefore} <em>{hero.titleHighlight}</em></h1>
-            <p>{hero.subtitle}</p>
-            {campaign && <div className="et-cta"><a className="et-btn gold" href={hero.buttonLink}>{hero.buttonText}</a></div>}
-          </div>
-
-          <div className={`et-visual ${campaign?.heroImageUrl ? "has-campaign" : ""}`}>
-            {campaign?.heroImageUrl ? (
-              <div className="et-campaign-panel">
-                <img src={campaign.heroImageUrl} alt={`Imagem da campanha ${campaign.name || "Eterniza"}`} />
-              </div>
-            ) : (
-              <>
-                <img className="et-couple" src={hero.image} alt="Casal em homenagem Eterniza" />
-                <div className="et-demo">
-                  <h3>Maria & José</h3>
-                  <p>24 de dezembro de 2021</p>
-                  <div className="et-stack">
-                    <img src="/eterniza/assets/brand/preview-couple.jpg" alt="Prévia da homenagem" />
-                    <span></span><span></span>
-                  </div>
-                  <a className="et-btn gold" href="/presente/demo-maria-e-jose">▶ Abrir surpresa</a>
-                </div>
-              </>
-            )}
-          </div>
-        </section>
-
-        {settings.landingShowExamples && <section className="et-cards" id="exemplos">
-          <a className="et-card" href="/exemplos"><img src="/eterniza/assets/brand/card-romance.jpg" alt="Romance" /><b>❤️ Romance</b><span>Bodas, dias juntos, luas cheias, carta e música.</span></a>
-          <a className="et-card" href="/exemplos"><img src="/eterniza/assets/brand/card-gratidao.jpg" alt="Gratidão" /><b>🌷 Gratidão</b><span>Homenagens para mãe, pai, avós e família.</span></a>
-          <a className="et-card" href="/exemplos"><img src="/eterniza/assets/brand/card-amizade.jpg" alt="Amizade" /><b>🎉 Amizade</b><span>Memórias, risadas e datas marcantes.</span></a>
-          <a className="et-card" href="/planos"><img src="/eterniza/assets/brand/card-venda.jpg" alt="Celebração" /><b>🎉 Celebração</b><span>Aniversários, formaturas, conquistas e datas especiais.</span></a>
-        </section>}
-
-        {settings.landingShowPlans && <section className="et-plans" id="planos">
-          <div className="et-plans-head">
-            <span>Planos Eterniza</span>
-            <h2>Escolha como sua homenagem vai viver.</h2>
-          </div>
-          <div className="et-plan-grid">
-            {visiblePlans.map(plan => (
-              <article key={plan.slug || plan.id} className={`et-plan ${(plan.slug || plan.id) === 'premium' ? 'featured' : ''}`}>
-                <h3>{plan.name}</h3>
-                <div className="et-plan-price">{money(plan.priceCents ?? plan.cents)}</div>
-                <p>{plan.description || `${plan.photos || 0} fotos e acesso ${plan.duration || 'vitalício'}.`}</p>
-                <small>{plan.photos || 0} fotos • {plan.duration || 'vitalício'}</small>
-              </article>
-            ))}
-          </div>
-        </section>}
-
-        <section className="et-pets-feature" aria-label="Eterniza Pets">
-          <div className="et-pets-copy">
-            <span className="et-pets-new">🐾 Novo módulo para clínicas</span>
-            <h2>Eterniza <em>Pets</em></h2>
-            <p>
-              Uma plataforma para clínicas veterinárias celebrarem aniversários, adoções, recuperações, altas, momentos especiais e também acolherem despedidas com sensibilidade.
-            </p>
-            <div className="et-pets-points">
-              <span>🐶 Fotos do pet</span>
-              <span>🩺 Recuperações e altas</span>
-              <span>💌 Mensagens e música</span>
-              <span>📊 Relatório mensal</span>
-            </div>
-            <a className="et-pets-btn" href="/pets">🐾 Conhecer Eterniza Pets</a>
-          </div>
-          <div className="et-pets-image">
-            <img
-              src="/eterniza/assets/pets/eterniza-pets-institucional.png"
-              alt="Cachorro e gato representando o Eterniza Pets"
-            />
-          </div>
-        </section>
-
-        {settings.landingShowProof && <section className="et-proof" id="como-funciona">
-          <div><b>🔒</b><p><strong>100% Seguro</strong><span>Seus dados protegidos</span></p></div>
-          <div><b>🏅</b><p><strong>Experiência única</strong><span>Como um filme de verdade</span></p></div>
-          <div><b>☁️</b><p><strong>Acesso para sempre</strong><span>Na nuvem, onde estiver</span></p></div>
-          <div><b>🎧</b><p><strong>Suporte humano</strong><span>Estamos com você</span></p></div>
-        </section>}
-      </div>
-    </main>
-  );
+import Shell from '../components/normal/Shell';
+import PetsBanner from '../components/normal/PetsBanner';
+import { categories, categoryFor } from '../lib/normal/categories';
+import '../components/normal/pets-banner.css';
+export default function Home(){
+  const [promo,setPromo]=useState(null);const [settings,setSettings]=useState(null);const [example,setExample]=useState(null);
+  useEffect(()=>{fetch('/api/marketing/campaign').then(r=>r.json()).then(d=>{if(d.ok)setPromo(d.campaign)}).catch(()=>{});fetch('/api/settings').then(r=>r.json()).then(d=>{if(d.ok)setSettings(d.settings)}).catch(()=>{});fetch('/api/home/example').then(r=>r.json()).then(d=>{if(d.ok)setExample(d.example)}).catch(()=>{});},[]);
+  const cta=settings?.homeV2Button||'Criar página';
+  return <Shell>{promo?.showTopBanner&&promo.bannerText?<div className="normal-card" style={{padding:12,textAlign:'center',marginBottom:18}}>{promo.bannerText} {promo.bannerButtonText&&<a href={promo.bannerButtonLink||promo.buttonLink||'/criar'}>{promo.bannerButtonText} →</a>}</div>:settings?.promoBannerEnabled&&settings.promoBannerText?<div className="normal-card" style={{padding:12,textAlign:'center',marginBottom:18}}>{settings.promoBannerText}</div>:null}
+    <section className="normal-hero"><div className="normal-hero-copy"><span className="normal-kicker">{settings?.homeV2Badge||'Momentos que sempre ficam'}</span><h1 className="normal-heading">{settings?.homeV2Title||'Celebre momentos que merecem ficar para sempre.'}</h1><p className="normal-subtitle">{settings?.homeV2Subtitle||'Crie páginas emocionantes para pessoas, histórias e momentos especiais da sua vida.'}</p></div><div className="normal-hero-visual"><picture>{!promo?.heroImageUrl&&<source media="(max-width: 600px)" srcSet="/normal/home-portrait.webp"/>}<img src={promo?.heroImageUrl||'/normal/home-wide.webp'} alt="Família e cachorro contemplando o pôr do sol"/></picture><span>Grandes momentos também vivem para sempre.</span></div><div className="normal-hero-action"><a href="/criar" className="normal-button">{cta} <span aria-hidden="true">→</span></a><p className="normal-hint">Comece sem cadastro. Escolha o plano e pague só no final.</p></div></section>
+    {settings?.homeV2ShowCategories!==false&&<>
+    <div className="normal-quick-categories" aria-label="Momentos para celebrar">{categories.map(cat=><a href="/criar" key={cat.id}><span>{cat.icon}</span><small>{cat.label}</small></a>)}</div>
+    <section className="normal-section"><span className="normal-kicker">Para cada fase da vida</span><h2>O que você quer celebrar?</h2><div className="normal-grid">{categories.map(cat=><a className="normal-category" key={cat.id} href="/criar"><img src={cat.image} alt=""/><div><strong>{cat.icon} {cat.label}</strong><small>{cat.subtitle}</small></div></a>)}</div></section>
+    </>}
+    {settings?.homeV2ShowSteps!==false&&<section className="normal-section"><span className="normal-kicker">Feito para todos</span><h2>Uma história linda, em poucos passos.</h2><div className="normal-steps"><div className="normal-card normal-step-card"><div className="normal-step-picture normal-step-choices" aria-hidden="true">{categories.slice(0,4).map(cat=><div key={cat.id}><img src={cat.image} alt=""/><span>{cat.label}</span></div>)}</div><b>01</b><h3>Escolha o momento</h3><p>Selecione uma categoria e conte essa história com suas palavras.</p></div><div className="normal-card normal-step-card"><div className="normal-step-picture normal-step-memory" aria-hidden="true"><img src="/normal/cards/familia.webp" alt=""/><div><span>Conte essa história do seu jeito</span><i>Um dia para guardar para sempre...</i><small>♡ Fotos · Data · Música</small></div></div><b>02</b><h3>Coloque as memórias</h3><p>Adicione fotos, uma data importante e a música que combina com vocês.</p></div><div className="normal-card normal-step-card"><div className="normal-step-picture normal-step-share" aria-hidden="true"><img src="/normal/cards/namoro.webp" alt=""/><div><span>Nossa história ♡</span><small>Uma página para recordar</small></div><strong>↗ Compartilhar página</strong></div><b>03</b><h3>Compartilhe para sempre</h3><p>Veja a prévia, escolha o plano e pague. Depois, envie o link ou imprima o QR.</p></div></div></section>}
+    {example&&<section className="normal-section normal-example"><div className="normal-example-copy"><span className="normal-kicker">Uma página real</span><h2>Uma história para conhecer</h2><span className="normal-pill">{categoryFor(example.category).label}</span><h3>{example.title}</h3>{example.excerpt&&<p>{example.excerpt}</p>}<a href={`/p/${encodeURIComponent(example.slug)}`} className="normal-button">Ver esta página ↗</a></div><a href={`/p/${encodeURIComponent(example.slug)}`} className="normal-example-image" aria-label={`Abrir ${example.title}`}><img src={example.photo||categoryFor(example.category).image} alt="Capa da página de exemplo"/></a></section>}
+    <PetsBanner/>
+    <section className="normal-section normal-center"><h2>Qual história você quer guardar?</h2><a href="/criar" className="normal-button">{cta} →</a></section>
+  </Shell>;
 }

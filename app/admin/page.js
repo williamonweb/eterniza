@@ -719,18 +719,19 @@ function DataSection({ title, description, query, setQuery, children }) {
 }
 
 function TributesTable({ items }) {
+  const normalCategories = { namoro: "Namoro / casal", casamento: "Casamento", aniversario: "Aniversário", bebe: "Bebê", familia: "Família", pet: "Meu pet", datas: "Datas especiais", homenagem: "Homenagem / memorial" };
   return (
     <div className="data-table">
-      <div className="data-row header"><span>Homenagem</span><span>Cliente</span><span>Plano</span><span>Status</span><span>Visualizações</span><span>Data</span><span></span></div>
+      <div className="data-row header"><span>Página</span><span>Cliente</span><span>Plano</span><span>Status</span><span>Visualizações</span><span>Data</span><span></span></div>
       {items.length ? items.map((item) => (
         <div className="data-row" key={item.id}>
-          <span><b>{item.receiverName}</b><small>{item.senderName || "Sem remetente"}</small></span>
+          <span><b>{item.title || item.receiverName || "Página sem título"}</b><small>{normalCategories[item.category] || "Página clássica"}{item.senderName ? ` · ${item.senderName}` : ""}</small></span>
           <span><b>{item.userName || "Cliente"}</b><small>{item.userEmail}</small></span>
           <span>{item.planName || item.planId || "—"}</span>
-          <span><em className={`status ${statusClass(item.status)}`}>{item.status}</em></span>
+          <span><em className={`status ${statusClass(item.status)}`}>{item.status === "DRAFT" ? "Rascunho" : item.status === "PUBLISHED" ? "Publicada" : item.status}</em></span>
           <span>{item.views || 0}</span>
           <span>{date(item.createdAt)}</span>
-          <span>{item.slug && <a href={`/presente/${item.slug}`} target="_blank" rel="noreferrer">Abrir</a>}</span>
+          <span>{item.slug && item.status === "PUBLISHED" && <a href={`${normalCategories[item.category] ? "/p" : "/presente"}/${encodeURIComponent(item.slug)}`} target="_blank" rel="noreferrer">Abrir</a>}</span>
         </div>
       )) : <p className="empty-state">Nenhuma homenagem encontrada.</p>}
     </div>
@@ -1426,7 +1427,19 @@ function SettingsManager({
 
       {activeTab === "landing" && (
         <div className="settings-grid">
-          <SettingsCard title="Hero da landing" description="Primeira mensagem vista pelo visitante.">
+          <SettingsCard title="Home Eterniza 2.0" description="Textos exibidos na página inicial do Eterniza normal.">
+            <SettingField label="Selo superior"><input value={settings.homeV2Badge || ""} onChange={(e) => updateSetting("homeV2Badge", e.target.value)} /></SettingField>
+            <SettingField label="Título principal"><input value={settings.homeV2Title || ""} onChange={(e) => updateSetting("homeV2Title", e.target.value)} /></SettingField>
+            <SettingField label="Descrição"><textarea value={settings.homeV2Subtitle || ""} onChange={(e) => updateSetting("homeV2Subtitle", e.target.value)} /></SettingField>
+            <SettingField label="Texto do botão"><input value={settings.homeV2Button || ""} onChange={(e) => updateSetting("homeV2Button", e.target.value)} /></SettingField>
+          </SettingsCard>
+          <SettingsCard title="Seções da Home 2.0" description="Escolha quais seções aparecem. O banner do Eterniza Pets permanece no site.">
+            <SettingToggle label="Mostrar categorias" checked={Boolean(settings.homeV2ShowCategories)} onChange={(value) => updateSetting("homeV2ShowCategories", value)} />
+            <SettingToggle label="Mostrar os três passos" checked={Boolean(settings.homeV2ShowSteps)} onChange={(value) => updateSetting("homeV2ShowSteps", value)} />
+            <SettingToggle label="Mostrar página real de exemplo" checked={Boolean(settings.homeV2ShowExample)} onChange={(value) => updateSetting("homeV2ShowExample", value)} />
+            <SettingField label="Link da página publicada (slug)"><input value={settings.homeV2ExampleSlug || ""} onChange={(e) => updateSetting("homeV2ExampleSlug", e.target.value)} placeholder="Ex.: nossa-historia" /><small>Escolha uma página pública criada no Eterniza 2.0. Ela só aparece se estiver publicada e a opção acima estiver ativada.</small></SettingField>
+          </SettingsCard>
+          <SettingsCard title="Hero da página clássica" description="Campos preservados para a experiência clássica; não alteram a Home 2.0.">
             <SettingField label="Selo superior">
               <input value={settings.landingBadge || ""} onChange={(e) => updateSetting("landingBadge", e.target.value)} />
             </SettingField>
@@ -1452,7 +1465,7 @@ function SettingsManager({
             </SettingField>
           </SettingsCard>
 
-          <SettingsCard title="Seções da landing" description="Escolha o que aparece na página inicial.">
+          <SettingsCard title="Seções da página clássica" description="Opções preservadas da experiência anterior.">
             <SettingToggle label="Mostrar exemplos" checked={Boolean(settings.landingShowExamples)} onChange={(value) => updateSetting("landingShowExamples", value)} />
             <SettingToggle label="Mostrar planos" checked={Boolean(settings.landingShowPlans)} onChange={(value) => updateSetting("landingShowPlans", value)} />
             <SettingToggle label="Mostrar selos de confiança" checked={Boolean(settings.landingShowProof)} onChange={(value) => updateSetting("landingShowProof", value)} />

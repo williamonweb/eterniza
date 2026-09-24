@@ -10,6 +10,15 @@ export const DEFAULT_SYSTEM_SETTINGS = {
   logoUrl: "/eterniza/assets/brand/logo-eterniza.png",
   faviconUrl: "/favicon.ico",
 
+  homeV2Badge: "Momentos que sempre ficam",
+  homeV2Title: "Celebre momentos que merecem ficar para sempre.",
+  homeV2Subtitle: "Crie páginas emocionantes para pessoas, histórias e momentos especiais da sua vida.",
+  homeV2Button: "Criar página",
+  homeV2ShowCategories: true,
+  homeV2ShowSteps: true,
+  homeV2ShowExample: false,
+  homeV2ExampleSlug: "",
+
   landingBadge: "⭐ Experiência cinematográfica",
   landingTitleBefore: "Transforme fotos, música e palavras em uma",
   landingTitleHighlight: "homenagem inesquecível.",
@@ -69,6 +78,15 @@ export const SETTINGS_GROUPS = {
   websiteUrl: "general",
   logoUrl: "general",
   faviconUrl: "general",
+
+  homeV2Badge: "landing",
+  homeV2Title: "landing",
+  homeV2Subtitle: "landing",
+  homeV2Button: "landing",
+  homeV2ShowCategories: "landing",
+  homeV2ShowSteps: "landing",
+  homeV2ShowExample: "landing",
+  homeV2ExampleSlug: "landing",
 
   landingBadge: "landing",
   landingTitleBefore: "landing",

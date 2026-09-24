@@ -1,3 +1,3 @@
-export default function Page() {
-  return <iframe src="/eterniza/index.html?route=landing&section=planos" style={{border:0,width:'100vw',height:'100vh',display:'block'}} />;
-}
+import { Suspense } from 'react';
+import Plans from '../../components/normal/Plans';
+export default function Page(){return <Suspense><Plans/></Suspense>;}

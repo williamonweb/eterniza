@@ -10,14 +10,10 @@ function normalizeAsaasStatus(status) {
   return "PENDING";
 }
 
-function isPaidAsaasEvent(event, status) {
-  const ev = String(event || "").toUpperCase();
+function isPaidAsaasEvent(_event, status) {
   const st = String(status || "").toUpperCase();
 
-  return (
-    ["PAYMENT_RECEIVED", "PAYMENT_CONFIRMED", "PAYMENT_RECEIVED_IN_CASH"].includes(ev) ||
-    ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(st)
-  );
+  return ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(st);
 }
 
 export async function POST(req) {
@@ -30,11 +26,8 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, message: "ID da cobrança Asaas não encontrado." }, { status: 400 });
     }
 
-    try {
-      asaasPayment = await getAsaasPayment(asaasPayment.id);
-    } catch (error) {
-      console.warn("Não foi possível consultar cobrança completa no Asaas. Usando payload do webhook.", error);
-    }
+    // A publicação depende do status confirmado diretamente no Asaas.
+    asaasPayment = await getAsaasPayment(asaasPayment.id);
 
     const asaasId = String(asaasPayment.id);
     const tributeId = String(asaasPayment.externalReference || "");
