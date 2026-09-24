@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '../../../../../lib/auth';
+import { prisma } from '../../../../../lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, message: 'Entre na sua conta para buscar músicas.' }, { status: 401 });
+  const searchSetting = await prisma.systemSetting.findUnique({ where: { key: 'youtubeSearchEnabled' }, select: { value: true } });
+  if (searchSetting?.value === false) return NextResponse.json({ ok: false, message: 'A busca de músicas está desativada.' }, { status: 403 });
   const q = new URL(request.url).searchParams.get('q')?.trim() || '';
   if (q.length < 2 || q.length > 100) return NextResponse.json({ ok: false, message: 'Digite o nome da música ou do artista.' }, { status: 400 });
   const key = process.env.YOUTUBE_API_KEY || process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;

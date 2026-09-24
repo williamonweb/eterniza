@@ -1,4 +1,6 @@
 
+import { openingDefaults } from '../../../lib/normal/openings';
+
 export const DEFAULT_SYSTEM_SETTINGS = {
   companyName: "Eterniza",
   slogan: "Onde Cada História Vive Para Sempre.",
@@ -45,6 +47,9 @@ export const DEFAULT_SYSTEM_SETTINGS = {
   musicShowPlayer: true,
   musicDefaultVolume: 68,
   youtubeSearchEnabled: true,
+  normalIntroEnabled: true,
+  normalIntroCountdown: 3,
+  ...openingDefaults,
 
   uploadEnabled: true,
   uploadMaxSizeMb: 8,
@@ -113,6 +118,9 @@ export const SETTINGS_GROUPS = {
   musicShowPlayer: "music",
   musicDefaultVolume: "music",
   youtubeSearchEnabled: "music",
+  normalIntroEnabled: "normal",
+  normalIntroCountdown: "normal",
+  ...Object.fromEntries(Object.keys(openingDefaults).map(key => [key, "normal"])),
 
   uploadEnabled: "upload",
   uploadMaxSizeMb: "upload",

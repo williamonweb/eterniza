@@ -50,6 +50,12 @@ async function ensureSettings() {
 function sanitizeValue(key, value) {
   const fallback = DEFAULT_SYSTEM_SETTINGS[key];
 
+  if (key === 'normalIntroCountdown') {
+    const seconds = Number(value);
+    return Number.isInteger(seconds) && seconds >= 0 && seconds <= 10 ? seconds : fallback;
+  }
+  if (key.startsWith('normalIntro_')) return String(value ?? '').trim().slice(0, 140) || fallback;
+
   if (typeof fallback === "boolean") return Boolean(value);
 
   if (typeof fallback === "number") {

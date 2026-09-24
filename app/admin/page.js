@@ -6,6 +6,7 @@ import AdminUsers from "../../components/admin/AdminUsers";
 import AdminCampaigns from "../../components/admin/AdminCampaigns";
 import AdminReports from "../../components/reports/AdminReports";
 import { getAdminPermissions } from "../../lib/adminPermissions";
+import { normalOpenings, openingKey } from '../../lib/normal/openings';
 
 const menu = [
   ["dashboard", "▦", "Dashboard"],
@@ -1348,6 +1349,7 @@ function SettingsManager({
   const tabs = [
     ["general", "Geral"],
     ["landing", "Landing"],
+    ["normal", "Eterniza 2.0"],
     ["commercial", "Comercial"],
     ["payments", "Pagamentos"],
     ["music", "Música"],
@@ -1473,6 +1475,19 @@ function SettingsManager({
         </div>
       )}
 
+      {activeTab === "normal" && (
+        <div className="settings-grid">
+          <SettingsCard title="Abertura da carta" description="Configura a experiência das páginas criadas no Eterniza normal. O módulo Eterniza Pets usa sua própria configuração.">
+            <SettingToggle label="Mostrar carta antes de abrir a página" checked={settings.normalIntroEnabled !== false} onChange={(value) => updateSetting('normalIntroEnabled', value)} />
+            <SettingField label="Contagem regressiva em segundos (0 a 10)"><input type="number" min="0" max="10" value={settings.normalIntroCountdown ?? 3} onChange={(event) => updateSetting('normalIntroCountdown', Number(event.target.value))} /></SettingField>
+            <p>As fotos, mensagem, datas e música são escolhidas pela pessoa durante a criação. As frases abaixo aparecem antes de abrir a carta.</p>
+          </SettingsCard>
+          {normalOpenings.map(item=><SettingsCard key={item.id} title={item.label} description="Frases da abertura desta categoria.">
+            {[1,2].map(line=><SettingField key={line} label={`Frase ${line}`}><input maxLength="140" value={settings[openingKey(item.id,line)] ?? item.lines[line-1]} onChange={(event)=>updateSetting(openingKey(item.id,line),event.target.value)} /></SettingField>)}
+          </SettingsCard>)}
+        </div>
+      )}
+
       {activeTab === "commercial" && (
         <div className="settings-grid">
           <SettingsCard title="Metas comerciais" description="Objetivos usados no painel administrativo.">
@@ -1534,7 +1549,8 @@ function SettingsManager({
         <div className="settings-grid">
           <SettingsCard title="Experiência musical" description="Defina como as trilhas se comportam nas homenagens.">
             <SettingToggle label="Música habilitada" checked={Boolean(settings.musicEnabled)} onChange={(value) => updateSetting("musicEnabled", value)} />
-            <SettingToggle label="Tentar reprodução automática" checked={Boolean(settings.musicAutoplay)} onChange={(value) => updateSetting("musicAutoplay", value)} />
+            <SettingToggle label="Tentar reprodução automática nas páginas clássicas" checked={Boolean(settings.musicAutoplay)} onChange={(value) => updateSetting("musicAutoplay", value)} />
+            <p>Nas páginas Eterniza 2.0, o clique em “Abrir a carta” inicia a música escolhida; o vídeo permanece oculto.</p>
             <SettingToggle label="Mostrar controles de música" checked={Boolean(settings.musicShowPlayer)} onChange={(value) => updateSetting("musicShowPlayer", value)} />
             <SettingToggle label="Permitir busca no YouTube" checked={Boolean(settings.youtubeSearchEnabled)} onChange={(value) => updateSetting("youtubeSearchEnabled", value)} />
             <SettingField label={`Volume inicial: ${settings.musicDefaultVolume ?? 68}%`}>
