@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { categoryFor } from '../../lib/normal/categories';
 import { normalOpenings, openingKey } from '../../lib/normal/openings';
 import './story.css';
+import './story-themes.css';
 
 export function youtubeId(value) {
   const raw = String(value || '').trim();
@@ -33,6 +34,17 @@ export function dateStats(value, now = new Date()) {
   const until = Math.round((Date.UTC(next.getFullYear(),next.getMonth(),next.getDate()) - Date.UTC(today.getFullYear(),today.getMonth(),today.getDate())) / 86400000);
   return { days, years, until, next, future:false };
 }
+const chapterTitles = {
+  namoro:'O amor mora nos detalhes',
+  casamento:'Uma vida inteira para celebrar',
+  aniversario:'Mais um capítulo para brindar',
+  bebe:'Um pequeno grande começo',
+  familia:'Onde as melhores memórias vivem',
+  pet:'Nosso companheiro de aventuras',
+  datas:'Um dia para guardar para sempre',
+  homenagem:'Uma história que vive em nós',
+};
+const themeMarks = {namoro:'♡',casamento:'∞',aniversario:'✦',bebe:'☼',familia:'❀',pet:'✿',datas:'✧',homenagem:'❧'};
 export default function Story({ content = {}, preview = false }) {
   const [now,setNow] = useState(null);
   const [open,setOpen] = useState(false);
@@ -130,7 +142,7 @@ export default function Story({ content = {}, preview = false }) {
     <div className="story-hero" style={{backgroundImage:`linear-gradient(0deg,rgba(25,19,16,.75),transparent 70%),url("${String(first).replace(/["\\]/g,'')}")`}}>
       <div data-story-reveal><span className="story-eyebrow">❧ Eterniza · {category.label}</span><h1>{title}</h1><p>{content.subtitle || 'Uma história para guardar para sempre.'}</p>{audioEnabled&&settings?.musicShowPlayer!==false&&<button type="button" className="story-audio-button" onClick={toggleAudio} aria-label={playing?'Pausar música':'Tocar música'}>{playing?'❚❚ Pausar música':'♫ Tocar música'}</button>}</div>
     </div>
-    <div className="story-body"><span className="story-ornament" data-story-reveal>✦</span><h2 data-story-reveal>{memorial ? 'Uma história que vive em nós' : 'Cada momento merece ser lembrado'}</h2>
+    <div className="story-body"><span className="story-ornament" data-story-reveal aria-hidden="true">{themeMarks[category.id]}</span><h2 data-story-reveal>{chapterTitles[category.id]}</h2>
       {content.message && <p className="story-message" data-story-reveal>{content.message}</p>}
       {stats && <div className="story-date" data-story-reveal><span>{memorial ? 'Para sempre em nossos corações' : stats.future ? 'Contando os dias' : category.id === 'bebe' || category.id === 'aniversario' ? 'Celebrando a vida' : 'Nossa história em números'}</span><strong>{stats.future ? `${stats.days} dias para esse momento` : memorial ? `${stats.days.toLocaleString('pt-BR')} dias de memórias` : `${stats.days.toLocaleString('pt-BR')} dias de história`}</strong>{!stats.future && !memorial && <small>{stats.years} {stats.years === 1 ? 'ano' : 'anos'} · {stats.until === 0 ? 'Hoje é o dia! ♥' : `Próximo aniversário em ${stats.until} ${stats.until === 1 ? 'dia' : 'dias'}`}</small>}</div>}
       {photos.length > 0 && <section className="story-gallery" data-story-reveal aria-label="Fotos desta história">{photos.map((photo,i)=><button type="button" className="story-gallery-item" key={i} aria-label={`Ampliar foto ${i+1} de ${photos.length}`} onClick={event=>openPhoto(i,event)}><img src={photo} alt={`Lembrança ${i+1}`} loading="lazy" /></button>)}</section>}

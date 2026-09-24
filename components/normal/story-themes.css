@@ -1,0 +1,99 @@
+/* Each occasion keeps the same accessible flow but has its own visual composition. */
+.story .story-body{position:relative}
+.story .story-ornament{font-size:30px;line-height:1.2}
+
+/* Namoro: warm, intimate photograph and an informal photo wall. */
+.story-namoro{background:#fff9f5}
+.story-namoro .story-hero{min-height:580px;background-position:center 40%;box-shadow:inset 0 -80px 100px #2b141442}
+.story-namoro .story-hero h1{font-style:italic;letter-spacing:-.045em}
+.story-namoro .story-body h2{color:#713e42}
+.story-namoro .story-date{border-radius:35px 35px 20px 20px;background:#f9eeee}
+.story-namoro .story-gallery .story-gallery-item:nth-child(3n + 2){border-radius:85px 85px 12px 12px}
+
+/* Casamento: a ceremony photograph framed like an arch, with gold editorial details. */
+.story-casamento{background:#fffcf6}
+.story-casamento .story-hero{min-height:640px;margin:26px 26px 0;border-radius:48% 48% 10px 10px / 26% 26% 10px 10px;justify-content:center;text-align:center;background-position:center 40%;box-shadow:0 20px 38px #715c3926}
+.story-casamento .story-hero>div{margin:0 auto}
+.story-casamento .story-hero h1{font-style:italic}
+.story-casamento .story-body{padding-top:75px}
+.story-casamento .story-body:before{content:"";display:block;width:100px;height:1px;background:#d2b681;margin:0 auto 24px}
+.story-casamento .story-message{border:0;font-style:italic}
+.story-casamento .story-date{background:#fbf7ed;border:1px solid #dcccac;border-radius:6px}
+.story-casamento .story-gallery .story-gallery-item{border:7px solid #fffbf5;border-radius:3px;box-shadow:0 2px 20px #765c3a29}
+
+/* Aniversário: a centered celebration and a lively three-column album. */
+.story-aniversario{background:#fff9ef}
+.story-aniversario .story-hero{min-height:500px;justify-content:center;align-items:center;text-align:center;background-position:center 48%}
+.story-aniversario .story-hero>div{margin:auto}
+.story-aniversario .story-hero:after{content:"✦   ✧   ✦";position:absolute;top:28px;right:30px;color:#fff0c8;font-size:24px;letter-spacing:16px;pointer-events:none;text-shadow:0 1px 14px #27180aaa}
+.story-aniversario .story-body h2{color:#9a6438}
+.story-aniversario .story-date{background:#fff1d8;border:1px solid #e5c992;border-radius:30px}
+.story-aniversario .story-gallery{grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.story-aniversario .story-gallery .story-gallery-item{height:240px;border-radius:20px}
+.story-aniversario .story-gallery .story-gallery-item:first-child:not(:last-child){grid-column:span 2;height:290px}
+.story-aniversario .story-gallery .story-gallery-item:nth-child(2):not(:last-child){height:290px}
+.story-aniversario .story-gallery .story-gallery-item:first-child:last-child{grid-column:1/-1;height:340px}
+
+/* Bebê: soft album pages and rounded portraits. */
+.story-bebe{background:#fff9fa}
+.story-bebe .story-hero{min-height:560px;margin:16px 16px 0;border-radius:200px 200px 26px 26px;background-position:center 31%}
+.story-bebe .story-body h2{color:#996779}
+.story-bebe .story-message{border:0;background:#fff0f2;padding:25px;border-radius:25px}
+.story-bebe .story-date{background:#fff0f2;border-radius:28px}
+.story-bebe .story-gallery .story-gallery-item{border-radius:27px}
+.story-bebe .story-gallery .story-gallery-item:first-child:not(:last-child){grid-column:span 2;height:340px}
+
+/* Família: an organic scrapbook with warm green accents. */
+.story-familia{background:#faf9f1}
+.story-familia .story-hero{min-height:540px;background-position:center 45%}
+.story-familia .story-body h2{color:#657a52}
+.story-familia .story-message{border:0;padding:24px;background:#f3f4e9;border-radius:4px 28px 4px 28px}
+.story-familia .story-date{background:#f0f2e7;border:1px solid #ccd8bc}
+.story-familia .story-gallery{gap:18px;padding:14px}
+.story-familia .story-gallery .story-gallery-item{border:8px solid #fff;background:#fff;border-radius:3px;box-shadow:0 9px 24px #37422923}
+.story-familia .story-gallery .story-gallery-item:nth-child(odd):not(:only-child){transform:rotate(-2deg)}
+.story-familia .story-gallery .story-gallery-item:nth-child(even){transform:rotate(2deg)}
+
+/* Pet here is the personal page category. It is separate from the clinics module. */
+.story-pet{background:#fcf9f2}
+.story-pet .story-hero{min-height:530px;margin:15px 15px 0;border-radius:28px;background-position:center 45%}
+.story-pet .story-hero:after{content:"✿";position:absolute;top:26px;right:30px;font-size:45px;color:#fff;text-shadow:0 2px 16px #271e0f88;pointer-events:none}
+.story-pet .story-body h2{color:#746342}
+.story-pet .story-date{background:#f5f0df;border-radius:30px}
+.story-pet .story-gallery .story-gallery-item{border-radius:28px 6px 28px 6px}
+
+/* Datas especiais: night-sky accents and a cinematic centered title. */
+.story-datas{background:#faf7fc}
+.story-datas .story-hero{min-height:610px;align-items:center;justify-content:center;text-align:center;background-position:center 45%}
+.story-datas .story-hero>div{margin:auto}
+.story-datas .story-hero h1{text-shadow:0 3px 25px #1d0e2688}
+.story-datas .story-body h2{color:#795e89}
+.story-datas .story-date{background:#f2eaf5;border-color:#d9c5e1;border-radius:15px}
+.story-datas .story-gallery .story-gallery-item:nth-child(3n){border-radius:150px 150px 12px 12px}
+
+/* Homenagem: quiet, restrained visual treatment. */
+.story-homenagem{background:#f6f4ef}
+.story-homenagem .story-intro{background:radial-gradient(ellipse at 50% 34%,#eae7db,#f8f6ef 75%)}
+.story-homenagem .story-envelope{animation:none}
+.story-homenagem .story-hero{min-height:560px;background-position:center 38%;box-shadow:inset 0 -90px 120px #13120e54}
+.story-homenagem .story-body h2{color:#635f52}
+.story-homenagem .story-message{border-color:#b7b0a0;font-style:italic}
+.story-homenagem .story-date{background:#eeece5;border-color:#d4cfc2;border-radius:5px}
+.story-homenagem .story-gallery .story-gallery-item{border-radius:3px;filter:saturate(.8)}
+
+@media(max-width:600px){
+  .story-casamento .story-hero{min-height:410px;margin:12px 12px 0;border-radius:48% 48% 10px 10px / 22% 22% 10px 10px}
+  .story-bebe .story-hero{min-height:400px;margin:9px 9px 0;border-radius:130px 130px 16px 16px}
+  .story-pet .story-hero{min-height:385px;margin:9px 9px 0}
+  .story-aniversario .story-hero,.story-namoro .story-hero,.story-familia .story-hero,.story-datas .story-hero,.story-homenagem .story-hero{min-height:390px}
+  .story-aniversario .story-gallery{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .story-aniversario .story-gallery .story-gallery-item,
+  .story-aniversario .story-gallery .story-gallery-item:first-child:not(:last-child),
+  .story-aniversario .story-gallery .story-gallery-item:nth-child(2):not(:last-child){height:150px}
+  .story-aniversario .story-gallery .story-gallery-item:first-child:last-child{height:220px}
+  .story-bebe .story-gallery .story-gallery-item:first-child:not(:last-child){height:220px}
+  .story-familia .story-gallery{padding:5px;gap:10px}
+  .story-familia .story-gallery .story-gallery-item{border-width:5px}
+  .story-aniversario .story-hero:after{font-size:17px;letter-spacing:8px;right:10px}
+}
+@media(prefers-reduced-motion:reduce){.story-familia .story-gallery .story-gallery-item{transform:none}}
