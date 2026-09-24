@@ -21,6 +21,10 @@ function dateAtNoon(value) {
   const date = new Date(year, month - 1, day, 12);
   return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : null;
 }
+function dateLabel(value) {
+  const date=dateAtNoon(value);
+  return date ? `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}` : '';
+}
 export function dateStats(value, now = new Date()) {
   const date = dateAtNoon(value);
   if (!date) return null;
@@ -70,6 +74,7 @@ export default function Story({ content = {}, preview = false }) {
   const photos = Array.isArray(content.photos) ? content.photos : [];
   const stats = now && dateStats(content.specialDate, now);
   const memorial = category.id === 'homenagem';
+  const inMemory = memorial && content.memorialType !== 'vida';
   const video = youtubeId(content.youtubeLink);
   useEffect(()=>()=>{playTimers.current.forEach(clearTimeout);},[]);
   const first = photos[0] || category.image;
@@ -135,19 +140,20 @@ export default function Story({ content = {}, preview = false }) {
       <span className="story-intro-kicker">Eterniza apresenta</span>
       <h2>{phrases[0]}</h2><p className="story-intro-phrase">{phrases[1]}</p>
       <div className="story-envelope" aria-hidden="true"><div className="story-envelope-flap"/><div className="story-envelope-face"/><div className="story-seal">E<span>✦</span></div></div>
-      <p className="story-intro-recipient">{content.receiverName ? `Para ${content.receiverName}` : 'Uma lembrança feita com carinho'}</p>
+      <p className="story-intro-recipient">{content.receiverName ? `${inMemory?'Em memória de':'Para'} ${content.receiverName}` : 'Uma lembrança feita com carinho'}</p>
       <div className="story-intro-bottom"><span className="story-intro-count" aria-live="polite">{count>0?`Sua surpresa começa em ${count}…`:'Sua carta está pronta ♡'}</span>{count===0&&<button type="button" className="story-open-button" onClick={openLetter}>Abrir a carta <span aria-hidden="true">↗</span></button>}</div>
     </div>}
     <div className={revealed?'story-reveal is-open':'story-reveal'} hidden={!revealed}>
-    <div className="story-hero" style={{backgroundImage:`linear-gradient(0deg,rgba(25,19,16,.75),transparent 70%),url("${String(first).replace(/["\\]/g,'')}")`}}>
+    {memorial?<div className="story-memorial-hero" data-story-reveal><span className="story-memorial-kicker">❧ Eterniza · {inMemory?'Em memória':'Homenagem'}</span><div className="story-memorial-portrait"><img src={first} alt={`Retrato de ${content.receiverName||title}`} /></div><h1>{content.receiverName?.trim()||title}</h1>{inMemory&&(dateLabel(content.birthDate)||dateLabel(content.deathDate))&&<p className="story-memorial-dates">{dateLabel(content.birthDate)||'—'} <span aria-hidden="true">—</span> {dateLabel(content.deathDate)||'—'}</p>}<p className="story-memorial-quote">“{content.subtitle?.trim()||(inMemory?'O amor permanece em cada lembrança.':'Uma história que merece ser celebrada.')}”</p>{audioEnabled&&settings?.musicShowPlayer!==false&&<button type="button" className="story-audio-button" onClick={toggleAudio} aria-label={playing?'Pausar música':'Tocar música'}>{playing?'❚❚ Pausar música':'♫ Tocar música'}</button>}</div>:<div className="story-hero" style={{backgroundImage:`linear-gradient(0deg,rgba(25,19,16,.75),transparent 70%),url("${String(first).replace(/["\\]/g,'')}")`}}>
       <div data-story-reveal><span className="story-eyebrow">❧ Eterniza · {category.label}</span><h1>{title}</h1><p>{content.subtitle || 'Uma história para guardar para sempre.'}</p>{audioEnabled&&settings?.musicShowPlayer!==false&&<button type="button" className="story-audio-button" onClick={toggleAudio} aria-label={playing?'Pausar música':'Tocar música'}>{playing?'❚❚ Pausar música':'♫ Tocar música'}</button>}</div>
-    </div>
+    </div>}
     <div className="story-body"><span className="story-ornament" data-story-reveal aria-hidden="true">{themeMarks[category.id]}</span><h2 data-story-reveal>{chapterTitles[category.id]}</h2>
       {content.message && <p className="story-message" data-story-reveal>{content.message}</p>}
-      {stats && <div className="story-date" data-story-reveal><span>{memorial ? 'Para sempre em nossos corações' : stats.future ? 'Contando os dias' : category.id === 'bebe' || category.id === 'aniversario' ? 'Celebrando a vida' : 'Nossa história em números'}</span><strong>{stats.future ? `${stats.days} dias para esse momento` : memorial ? `${stats.days.toLocaleString('pt-BR')} dias de memórias` : `${stats.days.toLocaleString('pt-BR')} dias de história`}</strong>{!stats.future && !memorial && <small>{stats.years} {stats.years === 1 ? 'ano' : 'anos'} · {stats.until === 0 ? 'Hoje é o dia! ♥' : `Próximo aniversário em ${stats.until} ${stats.until === 1 ? 'dia' : 'dias'}`}</small>}</div>}
+      {stats && !memorial && <div className="story-date" data-story-reveal><span>{stats.future ? 'Contando os dias' : category.id === 'bebe' || category.id === 'aniversario' ? 'Celebrando a vida' : 'Nossa história em números'}</span><strong>{stats.future ? `${stats.days} dias para esse momento` : `${stats.days.toLocaleString('pt-BR')} dias de história`}</strong>{!stats.future && <small>{stats.years} {stats.years === 1 ? 'ano' : 'anos'} · {stats.until === 0 ? 'Hoje é o dia! ♥' : `Próximo aniversário em ${stats.until} ${stats.until === 1 ? 'dia' : 'dias'}`}</small>}</div>}
+      {memorial&&content.memorialType==='vida'&&dateLabel(content.specialDate)&&<p className="story-memorial-special" data-story-reveal>Uma data especial · {dateLabel(content.specialDate)}</p>}
       {photos.length > 0 && <section className="story-gallery" data-story-reveal aria-label="Fotos desta história">{photos.map((photo,i)=><button type="button" className="story-gallery-item" key={i} aria-label={`Ampliar foto ${i+1} de ${photos.length}`} onClick={event=>openPhoto(i,event)}><img src={photo} alt={`Lembrança ${i+1}`} loading="lazy" /></button>)}</section>}
       {audioEnabled&&content.musicTitle&&<p className="story-music-credit" data-story-reveal>♫ Nossa música: {content.musicTitle}{content.musicArtist&&` · ${content.musicArtist}`}</p>}
-      {content.senderName && <p className="story-signature" data-story-reveal>Com carinho, <strong>{content.senderName}</strong> ♡</p>}
+      {content.senderName && <p className="story-signature" data-story-reveal>{inMemory?'Com saudade e carinho,':'Com carinho,'} <strong>{content.senderName}</strong> ♡</p>}
     </div><footer className="story-footer">❧ Eterniza · Momentos que sempre ficam</footer></div>
     {activePhoto!==null&&photos.length>0&&typeof document!=='undefined'&&createPortal(<div className="story-lightbox" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)closePhoto();}}><div className="story-lightbox-panel" role="dialog" aria-modal="true" aria-label={`Foto ${activePhoto+1} de ${photos.length}`}><button ref={closePhotoRef} type="button" className="story-lightbox-close" onClick={closePhoto} aria-label="Fechar foto">×</button><img src={photos[activePhoto]} alt={`Lembrança ${activePhoto+1} ampliada`}/><div className="story-lightbox-controls"><span>{activePhoto+1} / {photos.length}</span>{photos.length>1&&<div><button ref={previousPhotoRef} type="button" onClick={()=>setActivePhoto(index=>(index-1+photos.length)%photos.length)} aria-label="Foto anterior">←</button><button ref={nextPhotoRef} type="button" onClick={()=>setActivePhoto(index=>(index+1)%photos.length)} aria-label="Próxima foto">→</button></div>}</div></div></div>,document.body)}
   </article>;

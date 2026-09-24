@@ -80,12 +80,23 @@
 .story-homenagem .story-message{border-color:#b7b0a0;font-style:italic}
 .story-homenagem .story-date{background:#eeece5;border-color:#d4cfc2;border-radius:5px}
 .story-homenagem .story-gallery .story-gallery-item{border-radius:3px;filter:saturate(.8)}
+.story-homenagem .story-memorial-hero{min-height:520px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:48px 26px 38px;background:radial-gradient(ellipse at top,#fffcf5,#f4f1ea 80%);color:#322e29;border-bottom:1px solid #e6dfd2}
+.story-homenagem .story-memorial-kicker{font:600 11px Arial,sans-serif;letter-spacing:.19em;text-transform:uppercase;color:#8a7355;margin-bottom:23px}
+.story-homenagem .story-memorial-portrait{width:clamp(155px,32vw,230px);height:clamp(155px,32vw,230px);border:5px solid #fff;border-radius:50%;overflow:hidden;box-shadow:0 0 0 1px #cab99a,0 15px 35px #57452c30;background:#ebe3d5}
+.story-homenagem .story-memorial-portrait img{width:100%;height:100%;object-fit:cover;display:block}
+.story-homenagem .story-memorial-hero h1{font:normal clamp(34px,5.4vw,58px)/1.13 Georgia,serif;margin:24px 0 6px;overflow-wrap:anywhere;color:#332e28}
+.story-homenagem .story-memorial-dates{font:14px Arial,sans-serif;letter-spacing:.09em;color:#766e63;margin:8px 0 0}
+.story-homenagem .story-memorial-dates span{margin:0 8px;color:#ab9678}
+.story-homenagem .story-memorial-quote{font:italic clamp(18px,2.5vw,24px)/1.5 Georgia,serif;max-width:560px;margin:23px auto 0;color:#655b50}
+.story-homenagem .story-memorial-hero .story-audio-button{margin-top:22px}
+.story-homenagem .story-memorial-special{font:15px Arial,sans-serif;color:#756855;margin:24px auto}
 
 @media(max-width:600px){
   .story-casamento .story-hero{min-height:410px;margin:12px 12px 0;border-radius:48% 48% 10px 10px / 22% 22% 10px 10px}
   .story-bebe .story-hero{min-height:400px;margin:9px 9px 0;border-radius:130px 130px 16px 16px}
   .story-pet .story-hero{min-height:385px;margin:9px 9px 0}
   .story-aniversario .story-hero,.story-namoro .story-hero,.story-familia .story-hero,.story-datas .story-hero,.story-homenagem .story-hero{min-height:390px}
+  .story-homenagem .story-memorial-hero{min-height:430px;padding:35px 20px}
   .story-aniversario .story-gallery{grid-template-columns:repeat(2,minmax(0,1fr))}
   .story-aniversario .story-gallery .story-gallery-item,
   .story-aniversario .story-gallery .story-gallery-item:first-child:not(:last-child),
