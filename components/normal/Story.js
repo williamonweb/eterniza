@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { categoryFor } from '../../lib/normal/categories';
 import { normalOpenings, openingKey } from '../../lib/normal/openings';
 import './story.css';
@@ -38,8 +39,14 @@ export default function Story({ content = {}, preview = false }) {
   const [count,setCount] = useState(null);
   const [settings,setSettings] = useState(null);
   const [playing,setPlaying] = useState(false);
+  const [activePhoto,setActivePhoto] = useState(null);
   const audioFrame=useRef(null);
   const playTimers=useRef([]);
+  const storyRef=useRef(null);
+  const closePhotoRef=useRef(null);
+  const previousPhotoRef=useRef(null);
+  const nextPhotoRef=useRef(null);
+  const photoTriggerRef=useRef(null);
   useEffect(() => { setNow(new Date()); const timer = setInterval(() => setNow(new Date()), 60_000); return () => clearInterval(timer); }, []);
   useEffect(() => {
     let alive=true;
@@ -60,6 +67,35 @@ export default function Story({ content = {}, preview = false }) {
   const phrases=defaults.lines.map((line,index)=>settings?.[openingKey(category.id,index+1)] || line);
   const revealed=open || settings?.normalIntroEnabled===false;
   const audioEnabled=Boolean(video && settings?.musicEnabled!==false);
+  useEffect(()=>{
+    if(!revealed || !storyRef.current)return;
+    const sections=storyRef.current.querySelectorAll('[data-story-reveal]');
+    if(!('IntersectionObserver' in window)){sections.forEach(section=>section.classList.add('is-visible'));return;}
+    const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add('is-visible');observer.unobserve(entry.target);}}),{threshold:.08,rootMargin:'0px 0px -35px 0px'});
+    sections.forEach(section=>observer.observe(section));
+    return()=>observer.disconnect();
+  },[revealed,photos.length]);
+  useEffect(()=>{
+    if(activePhoto===null)return;
+    const previousOverflow=document.body.style.overflow;
+    document.body.style.overflow='hidden';
+    closePhotoRef.current?.focus();
+    function handleKey(event){
+      if(event.key==='Escape'){setActivePhoto(null);return;}
+      if(event.key==='ArrowRight'){event.preventDefault();setActivePhoto(index=>(index+1)%photos.length);}
+      if(event.key==='ArrowLeft'){event.preventDefault();setActivePhoto(index=>(index-1+photos.length)%photos.length);}
+      if(event.key==='Tab'){
+        const controls=[closePhotoRef.current,previousPhotoRef.current,nextPhotoRef.current].filter(Boolean);
+        const index=controls.indexOf(document.activeElement);
+        if(event.shiftKey&&index<=0){event.preventDefault();controls[controls.length-1]?.focus();}
+        else if(!event.shiftKey&&index===controls.length-1){event.preventDefault();controls[0]?.focus();}
+      }
+    }
+    document.addEventListener('keydown',handleKey);
+    return()=>{document.body.style.overflow=previousOverflow;document.removeEventListener('keydown',handleKey);photoTriggerRef.current?.focus();};
+  },[activePhoto===null,photos.length]);
+  function openPhoto(index,event){photoTriggerRef.current=event.currentTarget;setActivePhoto(index);}
+  function closePhoto(){setActivePhoto(null);}
   function audioSrc(autoPlay=false){
     const params=new URLSearchParams({autoplay:autoPlay?'1':'0',mute:'0',controls:'0',rel:'0',playsinline:'1',enablejsapi:'1',fs:'0'});
     if(typeof window!=='undefined')params.set('origin',window.location.origin);
@@ -79,7 +115,7 @@ export default function Story({ content = {}, preview = false }) {
   }
   function openLetter(){playAudio();setOpen(true);}
   function toggleAudio(){if(playing){playTimers.current.forEach(clearTimeout);audioCommand('pauseVideo');setPlaying(false);}else playAudio();}
-  return <article className={`story story-${category.id}`} style={{'--story-accent':category.accent}}>
+  return <article ref={storyRef} className={`story story-${category.id}`} style={{'--story-accent':category.accent}}>
     {preview && <div className="story-preview-label">Pré-visualização · só você pode ver por enquanto</div>}
     {audioEnabled&&<iframe ref={audioFrame} className="story-audio-frame" src={audioSrc(false)} title="Áudio da história" allow="autoplay; encrypted-media" tabIndex={-1} aria-hidden="true" referrerPolicy="strict-origin-when-cross-origin" />}
     {settings && !revealed&&<div className="story-intro" aria-label="Uma carta especial para você">
@@ -92,14 +128,15 @@ export default function Story({ content = {}, preview = false }) {
     </div>}
     <div className={revealed?'story-reveal is-open':'story-reveal'} hidden={!revealed}>
     <div className="story-hero" style={{backgroundImage:`linear-gradient(0deg,rgba(25,19,16,.75),transparent 70%),url("${String(first).replace(/["\\]/g,'')}")`}}>
-      <div><span className="story-eyebrow">❧ Eterniza · {category.label}</span><h1>{title}</h1><p>{content.subtitle || 'Uma história para guardar para sempre.'}</p>{audioEnabled&&settings?.musicShowPlayer!==false&&<button type="button" className="story-audio-button" onClick={toggleAudio} aria-label={playing?'Pausar música':'Tocar música'}>{playing?'❚❚ Pausar música':'♫ Tocar música'}</button>}</div>
+      <div data-story-reveal><span className="story-eyebrow">❧ Eterniza · {category.label}</span><h1>{title}</h1><p>{content.subtitle || 'Uma história para guardar para sempre.'}</p>{audioEnabled&&settings?.musicShowPlayer!==false&&<button type="button" className="story-audio-button" onClick={toggleAudio} aria-label={playing?'Pausar música':'Tocar música'}>{playing?'❚❚ Pausar música':'♫ Tocar música'}</button>}</div>
     </div>
-    <div className="story-body"><span className="story-ornament">✦</span><h2>{memorial ? 'Uma história que vive em nós' : 'Cada momento merece ser lembrado'}</h2>
-      {content.message && <p className="story-message">{content.message}</p>}
-      {stats && <div className="story-date"><span>{memorial ? 'Para sempre em nossos corações' : stats.future ? 'Contando os dias' : category.id === 'bebe' || category.id === 'aniversario' ? 'Celebrando a vida' : 'Nossa história em números'}</span><strong>{stats.future ? `${stats.days} dias para esse momento` : memorial ? `${stats.days.toLocaleString('pt-BR')} dias de memórias` : `${stats.days.toLocaleString('pt-BR')} dias de história`}</strong>{!stats.future && !memorial && <small>{stats.years} {stats.years === 1 ? 'ano' : 'anos'} · {stats.until === 0 ? 'Hoje é o dia! ♥' : `Próximo aniversário em ${stats.until} ${stats.until === 1 ? 'dia' : 'dias'}`}</small>}</div>}
-      {photos.length > 0 && <section className="story-gallery" aria-label="Fotos desta história">{photos.map((photo,i)=><img key={i} src={photo} alt={`Lembrança ${i+1}`} loading="lazy" />)}</section>}
-      {audioEnabled&&content.musicTitle&&<p className="story-music-credit">♫ Nossa música: {content.musicTitle}{content.musicArtist&&` · ${content.musicArtist}`}</p>}
-      {content.senderName && <p className="story-signature">Com carinho, <strong>{content.senderName}</strong> ♡</p>}
+    <div className="story-body"><span className="story-ornament" data-story-reveal>✦</span><h2 data-story-reveal>{memorial ? 'Uma história que vive em nós' : 'Cada momento merece ser lembrado'}</h2>
+      {content.message && <p className="story-message" data-story-reveal>{content.message}</p>}
+      {stats && <div className="story-date" data-story-reveal><span>{memorial ? 'Para sempre em nossos corações' : stats.future ? 'Contando os dias' : category.id === 'bebe' || category.id === 'aniversario' ? 'Celebrando a vida' : 'Nossa história em números'}</span><strong>{stats.future ? `${stats.days} dias para esse momento` : memorial ? `${stats.days.toLocaleString('pt-BR')} dias de memórias` : `${stats.days.toLocaleString('pt-BR')} dias de história`}</strong>{!stats.future && !memorial && <small>{stats.years} {stats.years === 1 ? 'ano' : 'anos'} · {stats.until === 0 ? 'Hoje é o dia! ♥' : `Próximo aniversário em ${stats.until} ${stats.until === 1 ? 'dia' : 'dias'}`}</small>}</div>}
+      {photos.length > 0 && <section className="story-gallery" data-story-reveal aria-label="Fotos desta história">{photos.map((photo,i)=><button type="button" className="story-gallery-item" key={i} aria-label={`Ampliar foto ${i+1} de ${photos.length}`} onClick={event=>openPhoto(i,event)}><img src={photo} alt={`Lembrança ${i+1}`} loading="lazy" /></button>)}</section>}
+      {audioEnabled&&content.musicTitle&&<p className="story-music-credit" data-story-reveal>♫ Nossa música: {content.musicTitle}{content.musicArtist&&` · ${content.musicArtist}`}</p>}
+      {content.senderName && <p className="story-signature" data-story-reveal>Com carinho, <strong>{content.senderName}</strong> ♡</p>}
     </div><footer className="story-footer">❧ Eterniza · Momentos que sempre ficam</footer></div>
+    {activePhoto!==null&&photos.length>0&&typeof document!=='undefined'&&createPortal(<div className="story-lightbox" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)closePhoto();}}><div className="story-lightbox-panel" role="dialog" aria-modal="true" aria-label={`Foto ${activePhoto+1} de ${photos.length}`}><button ref={closePhotoRef} type="button" className="story-lightbox-close" onClick={closePhoto} aria-label="Fechar foto">×</button><img src={photos[activePhoto]} alt={`Lembrança ${activePhoto+1} ampliada`}/><div className="story-lightbox-controls"><span>{activePhoto+1} / {photos.length}</span>{photos.length>1&&<div><button ref={previousPhotoRef} type="button" onClick={()=>setActivePhoto(index=>(index-1+photos.length)%photos.length)} aria-label="Foto anterior">←</button><button ref={nextPhotoRef} type="button" onClick={()=>setActivePhoto(index=>(index+1)%photos.length)} aria-label="Próxima foto">→</button></div>}</div></div></div>,document.body)}
   </article>;
 }

@@ -11,3 +11,9 @@
 @media(max-width:600px){.normal-header .normal-logo{gap:8px}.normal-header .normal-symbol{width:53px;height:39px;background-size:107px 107px;background-position:-26.8px -19.9px}.normal-header .normal-wordmark{width:137px;height:16px;background-size:187px 187px;background-position:-25.2px -112.9px}}
 @media(max-width:360px){.normal-header-cta{width:43px;min-width:43px;padding:6px;font-size:0}.normal-header-cta span{font-size:20px}}
 @media(max-width:600px){.normal-header{gap:12px}}
+/* A criação segue compacta; só a prévia e a página pública ganham espaço no desktop. */
+@media(min-width:850px){
+  .normal-main.narrow.story-wide{max-width:1120px}
+  .story-wide .normal-preview-frame{max-width:960px;margin:22px auto}
+  .story-wide .story-gallery{max-width:850px}
+}
