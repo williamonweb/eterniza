@@ -69,10 +69,8 @@ export async function GET() {
       );
     }
 
-    const where = user.role === "ADMIN" ? {} : { userId: user.id };
-
     const tributes = await prisma.tribute.findMany({
-      where,
+      where: { userId: user.id },
       orderBy: {
         updatedAt: "desc",
       },
