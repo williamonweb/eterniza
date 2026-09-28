@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import SupportAdmin from "../../components/support/SupportAdmin";
 import AdminInstall from "../../components/admin/AdminInstall";
+import HomePopupUpload from "../../components/admin/HomePopupUpload";
 import AdminUsers from "../../components/admin/AdminUsers";
 import AdminCampaigns from "../../components/admin/AdminCampaigns";
 import AdminReports from "../../components/reports/AdminReports";
@@ -1441,7 +1442,7 @@ function SettingsManager({
             <SettingToggle label="Ativar aviso de abertura" checked={Boolean(settings.homePopupEnabled)} onChange={(value) => updateSetting('homePopupEnabled', value)} />
             <SettingField label="Título (opcional)"><input maxLength="140" value={settings.homePopupTitle || ''} onChange={(e) => updateSetting('homePopupTitle', e.target.value)} /></SettingField>
             <SettingField label="Mensagem (opcional)"><textarea maxLength="1000" value={settings.homePopupText || ''} onChange={(e) => updateSetting('homePopupText', e.target.value)} /></SettingField>
-            <SettingField label="Endereço da imagem (opcional)"><input type="url" value={settings.homePopupImageUrl || ''} onChange={(e) => updateSetting('homePopupImageUrl', e.target.value)} placeholder="https://..." /><small>Use uma imagem hospedada em HTTPS. Se preencher somente este campo, o aviso exibirá apenas a imagem.</small></SettingField>
+            <SettingField label="Imagem do aviso (opcional)"><HomePopupUpload imageUrl={settings.homePopupImageUrl || ''} onChange={(url)=>updateSetting('homePopupImageUrl',url)} /></SettingField>
             <SettingField label="Texto do botão (opcional)"><input maxLength="140" value={settings.homePopupButtonText || ''} onChange={(e) => updateSetting('homePopupButtonText', e.target.value)} /></SettingField>
             <SettingField label="Link do botão (opcional)"><input value={settings.homePopupButtonUrl || ''} onChange={(e) => updateSetting('homePopupButtonUrl', e.target.value)} placeholder="/criar ou https://..." /></SettingField>
           </SettingsCard>
