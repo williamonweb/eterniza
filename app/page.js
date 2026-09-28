@@ -2,13 +2,14 @@
 import { useEffect, useState } from 'react';
 import Shell from '../components/normal/Shell';
 import PetsBanner from '../components/normal/PetsBanner';
+import HomePopup from '../components/normal/HomePopup';
 import { categories, categoryFor } from '../lib/normal/categories';
 import '../components/normal/pets-banner.css';
 export default function Home(){
   const [promo,setPromo]=useState(null);const [settings,setSettings]=useState(null);const [example,setExample]=useState(null);
   useEffect(()=>{fetch('/api/marketing/campaign').then(r=>r.json()).then(d=>{if(d.ok)setPromo(d.campaign)}).catch(()=>{});fetch('/api/settings').then(r=>r.json()).then(d=>{if(d.ok)setSettings(d.settings)}).catch(()=>{});fetch('/api/home/example').then(r=>r.json()).then(d=>{if(d.ok)setExample(d.example)}).catch(()=>{});},[]);
   const cta=settings?.homeV2Button||'Criar página';
-  return <Shell>{promo?.showTopBanner&&promo.bannerText?<div className="normal-card" style={{padding:12,textAlign:'center',marginBottom:18}}>{promo.bannerText} {promo.bannerButtonText&&<a href={promo.bannerButtonLink||promo.buttonLink||'/criar'}>{promo.bannerButtonText} →</a>}</div>:settings?.promoBannerEnabled&&settings.promoBannerText?<div className="normal-card" style={{padding:12,textAlign:'center',marginBottom:18}}>{settings.promoBannerText}</div>:null}
+  return <Shell><HomePopup settings={settings}/>{promo?.showTopBanner&&promo.bannerText?<div className="normal-card" style={{padding:12,textAlign:'center',marginBottom:18}}>{promo.bannerText} {promo.bannerButtonText&&<a href={promo.bannerButtonLink||promo.buttonLink||'/criar'}>{promo.bannerButtonText} →</a>}</div>:settings?.promoBannerEnabled&&settings.promoBannerText?<div className="normal-card" style={{padding:12,textAlign:'center',marginBottom:18}}>{settings.promoBannerText}</div>:null}
     <section className="normal-hero"><div className="normal-hero-copy"><span className="normal-kicker">{settings?.homeV2Badge||'Momentos que sempre ficam'}</span><h1 className="normal-heading">{settings?.homeV2Title||'Celebre momentos que merecem ficar para sempre.'}</h1><p className="normal-subtitle">{settings?.homeV2Subtitle||'Crie páginas emocionantes para pessoas, histórias e momentos especiais da sua vida.'}</p></div><div className="normal-hero-visual"><picture>{!promo?.heroImageUrl&&<source media="(max-width: 600px)" srcSet="/normal/home-portrait.webp"/>}<img src={promo?.heroImageUrl||'/normal/home-wide.webp'} alt="Família e cachorro contemplando o pôr do sol"/></picture><span>Grandes momentos também vivem para sempre.</span></div><div className="normal-hero-action"><a href="/criar" className="normal-button">{cta} <span aria-hidden="true">→</span></a><p className="normal-hint">Comece sem cadastro. Escolha o plano e pague só no final.</p></div></section>
     {settings?.homeV2ShowCategories!==false&&<>
     <div className="normal-quick-categories" aria-label="Momentos para celebrar">{categories.map(cat=><a href="/criar" key={cat.id}><span>{cat.icon}</span><small>{cat.label}</small></a>)}</div>

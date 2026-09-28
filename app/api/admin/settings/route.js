@@ -50,6 +50,16 @@ async function ensureSettings() {
 function sanitizeValue(key, value) {
   const fallback = DEFAULT_SYSTEM_SETTINGS[key];
 
+  if (key === 'homePopupImageUrl' || key === 'homePopupButtonUrl') {
+    const url = String(value ?? '').trim().slice(0, 2048);
+    if (!url) return '';
+    if (url.startsWith('/') && !url.startsWith('//') && !url.includes('\\')) return url;
+    try { if (new URL(url).protocol === 'https:') return url; } catch {}
+    return '';
+  }
+  if (key === 'homePopupTitle' || key === 'homePopupButtonText') return String(value ?? '').trim().slice(0, 140);
+  if (key === 'homePopupText') return String(value ?? '').trim().slice(0, 1000);
+
   if (key === 'normalIntroCountdown') {
     const seconds = Number(value);
     return Number.isInteger(seconds) && seconds >= 0 && seconds <= 10 ? seconds : fallback;

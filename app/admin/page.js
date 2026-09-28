@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import SupportAdmin from "../../components/support/SupportAdmin";
+import AdminInstall from "../../components/admin/AdminInstall";
 import AdminUsers from "../../components/admin/AdminUsers";
 import AdminCampaigns from "../../components/admin/AdminCampaigns";
 import AdminReports from "../../components/reports/AdminReports";
@@ -438,6 +439,7 @@ export default function AdminPage() {
             <h1>{sectionTitle(active)}</h1>
           </div>
           <div className="topbar-actions">
+            <AdminInstall />
             <label className="global-search">
               <span>⌕</span>
               <input
@@ -1434,6 +1436,14 @@ function SettingsManager({
             <SettingField label="Título principal"><input value={settings.homeV2Title || ""} onChange={(e) => updateSetting("homeV2Title", e.target.value)} /></SettingField>
             <SettingField label="Descrição"><textarea value={settings.homeV2Subtitle || ""} onChange={(e) => updateSetting("homeV2Subtitle", e.target.value)} /></SettingField>
             <SettingField label="Texto do botão"><input value={settings.homeV2Button || ""} onChange={(e) => updateSetting("homeV2Button", e.target.value)} /></SettingField>
+          </SettingsCard>
+          <SettingsCard title="Aviso de abertura da Home" description="Mostra uma vez por visita na página inicial do Eterniza normal. Use texto, imagem ou os dois.">
+            <SettingToggle label="Ativar aviso de abertura" checked={Boolean(settings.homePopupEnabled)} onChange={(value) => updateSetting('homePopupEnabled', value)} />
+            <SettingField label="Título (opcional)"><input maxLength="140" value={settings.homePopupTitle || ''} onChange={(e) => updateSetting('homePopupTitle', e.target.value)} /></SettingField>
+            <SettingField label="Mensagem (opcional)"><textarea maxLength="1000" value={settings.homePopupText || ''} onChange={(e) => updateSetting('homePopupText', e.target.value)} /></SettingField>
+            <SettingField label="Endereço da imagem (opcional)"><input type="url" value={settings.homePopupImageUrl || ''} onChange={(e) => updateSetting('homePopupImageUrl', e.target.value)} placeholder="https://..." /><small>Use uma imagem hospedada em HTTPS. Se preencher somente este campo, o aviso exibirá apenas a imagem.</small></SettingField>
+            <SettingField label="Texto do botão (opcional)"><input maxLength="140" value={settings.homePopupButtonText || ''} onChange={(e) => updateSetting('homePopupButtonText', e.target.value)} /></SettingField>
+            <SettingField label="Link do botão (opcional)"><input value={settings.homePopupButtonUrl || ''} onChange={(e) => updateSetting('homePopupButtonUrl', e.target.value)} placeholder="/criar ou https://..." /></SettingField>
           </SettingsCard>
           <SettingsCard title="Seções da Home 2.0" description="Escolha quais seções aparecem. O banner do Eterniza Pets permanece no site.">
             <SettingToggle label="Mostrar categorias" checked={Boolean(settings.homeV2ShowCategories)} onChange={(value) => updateSetting("homeV2ShowCategories", value)} />
