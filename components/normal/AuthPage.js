@@ -1,10 +1,11 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Shell from './Shell';
 const destination = (value,fallback) => typeof value==='string' && value.startsWith('/') && !value.startsWith('//') && !value.startsWith('/\\') ? value : fallback;
 export default function AuthPage({ register = false }){
   const search=useSearchParams();const [name,setName]=useState('');const [email,setEmail]=useState('');const [phone,setPhone]=useState('');const [password,setPassword]=useState('');const [confirm,setConfirm]=useState('');const [show,setShow]=useState(false);const [error,setError]=useState('');const [loading,setLoading]=useState(false);
+  useEffect(()=>{let active=true;fetch('/api/auth/me',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(data=>{if(!active||!data?.ok||!data.user)return;const fallback=data.user.role==='admin'?'/admin':'/minhas-paginas';window.location.replace(destination(search.get('redirect'),fallback));}).catch(()=>{});return()=>{active=false;};},[search,register]);
   async function submit(e){e.preventDefault();setError('');if(register&&password!==confirm){setError('As senhas não conferem.');return;}setLoading(true);
     try{const res=await fetch(register?'/api/auth/register':'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.trim(),email:email.trim().toLowerCase(),whatsapp:phone.replace(/\D/g,''),password})});const result=await res.json();if(!res.ok||!result.ok)throw new Error(result.message||'Não foi possível continuar.');
       const fallback=register?'/criar/tipo':result.user.role==='admin'?'/admin':'/minhas-paginas';window.location.assign(destination(search.get('redirect'),fallback));

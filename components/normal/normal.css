@@ -8,3 +8,8 @@
 .normal-memorial-choice button{flex:1 1 190px;min-height:52px;background:#fff;border:1px solid #dacebd;border-radius:13px;color:#40362d;font:600 15px Arial,sans-serif;cursor:pointer;padding:10px 14px}
 .normal-memorial-choice button.selected{border:2px solid #9d7846;background:#fbf4e8;color:#684a27}
 .normal-memorial-choice button:focus-visible{outline:3px solid #a77c44;outline-offset:3px}
+.normal-payment-methods{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}
+.normal-payment-methods button{flex:1 1 180px;min-height:55px;background:#fff;border:1px solid #dacebd;border-radius:13px;color:#43382b;font:600 16px Arial,sans-serif;cursor:pointer}
+.normal-payment-methods button.selected{background:#fbf3e6;border:2px solid #9d7846;color:#76552e}
+.normal-payment-methods button:focus-visible{outline:3px solid #a77c44;outline-offset:3px}
+.normal-logout,.normal-mobile-logout{border:0;background:transparent;color:#493c31;font:inherit;cursor:pointer;white-space:nowrap}.normal-logout:hover,.normal-mobile-logout:hover{text-decoration:underline}.normal-header-actions{display:flex;align-items:center;gap:8px}.normal-mobile-logout{display:none}@media(max-width:850px){.normal-mobile-logout{display:inline-flex;padding:12px 3px;font-size:14px}}@media(max-width:390px){.normal-header-actions{gap:2px}.normal-header-actions .normal-header-cta{font-size:12px;padding:9px}}
