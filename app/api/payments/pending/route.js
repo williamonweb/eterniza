@@ -27,14 +27,16 @@ export async function GET(req) {
       return NextResponse.json({ ok: true, published: true, slug: tribute.slug });
     }
     if (asaas.status !== 'PENDING') return NextResponse.json({ ok: true, payment: null });
-    const qr = await getAsaasPixQrCode(payment.mercadoPagoId);
+    const qr = asaas.billingType === 'PIX' ? await getAsaasPixQrCode(payment.mercadoPagoId) : null;
     return NextResponse.json({ ok: true, payment: {
       asaasId: payment.mercadoPagoId,
-      qrCode: qr.payload || qr.pixCopiaECola || null,
-      qrCodeBase64: qr.encodedImage || qr.qrCodeBase64 || null,
+      billingType: asaas.billingType,
+      invoiceUrl: asaas.invoiceUrl || null,
+      qrCode: qr?.payload || qr?.pixCopiaECola || null,
+      qrCodeBase64: qr?.encodedImage || qr?.qrCodeBase64 || null,
     } });
   } catch (error) {
     console.error('Erro em GET /api/payments/pending:', error);
-    return NextResponse.json({ ok: false, message: 'Não foi possível verificar o PIX anterior.' }, { status: 500 });
+    return NextResponse.json({ ok: false, message: 'Não foi possível verificar o pagamento anterior.' }, { status: 500 });
   }
 }

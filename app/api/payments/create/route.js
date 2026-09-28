@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 import { getCurrentUser } from "../../../../lib/auth";
-import { createAsaasPixPayment, getPlanBySlug, getAsaasPayment, getAsaasPixQrCode } from "../../../../lib/asaas";
+import { createAsaasPayment, changeAsaasPaymentMethod, getPlanBySlug, getAsaasPayment, getAsaasPixQrCode } from "../../../../lib/asaas";
 import { hasGuestAccess } from "../../../../lib/normal/guestAccess";
 
 export const dynamic = "force-dynamic";
@@ -83,6 +83,7 @@ export async function POST(req) {
     const payerEmail = String(body.email || "").trim().toLowerCase();
     const payerName = String(body.name || "").trim().slice(0, 120);
     const couponCode = normalizeCouponCode(body.couponCode || body.coupon || "");
+    const billingType = body.billingType === "CREDIT_CARD" ? "CREDIT_CARD" : "PIX";
 
     if (!tributeId) {
       return NextResponse.json({ ok: false, message: "Homenagem não informada." }, { status: 400 });
@@ -93,8 +94,8 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, message: "Página não encontrada neste navegador." }, { status: 404 });
     }
     const guest = tribute.user.email.endsWith('@guest.eternizas.invalid');
-    if (guest && (!payerName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payerEmail))) {
-      return NextResponse.json({ ok: false, message: "Informe seu nome e e-mail para gerar o PIX." }, { status: 400 });
+    if (!payerName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payerEmail) || payerEmail.endsWith('.invalid')) {
+      return NextResponse.json({ ok: false, message: "Informe seu nome e e-mail para gerar o pagamento." }, { status: 400 });
     }
     const dbUser = guest ? { id: tribute.userId, name: payerName, email: payerEmail, cpf: null } : await prisma.user.findUnique({
       where: { id: tribute.userId }, select: { id: true, name: true, email: true, cpf: true },
@@ -104,24 +105,17 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, message: "Usuário não encontrado." }, { status: 404 });
     }
 
-    const cpfCnpj = onlyDigits(dbUser.cpf || "") || cpfFromBody;
+    const cpfCnpj = cpfFromBody || onlyDigits(dbUser.cpf || "");
 
     if (!isValidCpf(cpfCnpj)) {
       return NextResponse.json(
         {
           ok: false,
           code: "CPF_REQUIRED",
-          message: "Informe um CPF válido para gerar o PIX.",
+          message: "Informe um CPF válido para gerar o pagamento.",
         },
         { status: 400 }
       );
-    }
-
-    if (!guest && cpfCnpj && cpfCnpj !== onlyDigits(dbUser.cpf || "")) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { cpf: cpfCnpj },
-      });
     }
 
     const tributeContent = tribute.content && typeof tribute.content === "object"
@@ -154,7 +148,7 @@ export async function POST(req) {
         {
           ok: false,
           code: 'PHOTO_LIMIT_EXCEEDED',
-          message: `O plano ${plan.name} permite até ${photoLimit} fotos. Remova as fotos excedentes antes de gerar o PIX.`,
+          message: `O plano ${plan.name} permite até ${photoLimit} fotos. Remova as fotos excedentes antes de pagar.`,
         },
         { status: 400 }
       );
@@ -167,15 +161,19 @@ export async function POST(req) {
     if (existingPending?.mercadoPagoId) {
       const charge = await getAsaasPayment(existingPending.mercadoPagoId);
       if (charge.status === 'PENDING') {
-        const qr = await getAsaasPixQrCode(existingPending.mercadoPagoId);
+        // Alterar a mesma cobrança evita deixar PIX e cartão pendentes para a mesma página.
+        const current = charge.billingType === billingType ? charge : await changeAsaasPaymentMethod(charge, billingType);
+        const qr = billingType === 'PIX' ? await getAsaasPixQrCode(current.id) : null;
         return NextResponse.json({ ok: true, provider: 'asaas', payment: {
           asaasId: existingPending.mercadoPagoId,
-          qrCode: qr.payload || qr.pixCopiaECola || null,
-          qrCodeBase64: qr.encodedImage || qr.qrCodeBase64 || null,
+          billingType,
+          invoiceUrl: current.invoiceUrl || null,
+          qrCode: qr?.payload || qr?.pixCopiaECola || null,
+          qrCodeBase64: qr?.encodedImage || qr?.qrCodeBase64 || null,
         } });
       }
       if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(charge.status)) {
-        return NextResponse.json({ ok: false, message: 'O PIX já foi pago. Reabra esta página para ver o resultado.' }, { status: 409 });
+        return NextResponse.json({ ok: false, message: 'O pagamento já foi confirmado. Reabra esta página para ver o resultado.' }, { status: 409 });
       }
     }
 
@@ -248,12 +246,13 @@ export async function POST(req) {
       await prisma.user.update({ where: { id: tribute.userId }, data: { name: payerName, notes: payerEmail } });
     }
 
-    const asaasResult = await createAsaasPixPayment({
+    const asaasResult = await createAsaasPayment({
       tributeId: tribute.id,
-      payerEmail: dbUser.email,
-      payerName: dbUser.name,
+      payerEmail,
+      payerName,
       payerCpfCnpj: cpfCnpj,
       plan: chargePlan,
+      billingType,
     });
 
     const payment = await prisma.$transaction(async (tx) => {
@@ -298,6 +297,8 @@ export async function POST(req) {
         mercadoPagoId: asaasResult.payment.id,
         asaasId: asaasResult.payment.id,
         status: asaasResult.payment.status,
+        billingType,
+        invoiceUrl: asaasResult.payment?.invoiceUrl || null,
         plan: {
           ...plan,
           price: pricing.finalPriceCents / 100,
