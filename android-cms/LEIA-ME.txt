@@ -1,0 +1,39 @@
+ETERNIZA CMS — PROJETO PARA GERAR O APK ANDROID
+
+Este ZIP contém um aplicativo Android real que abre o painel
+https://eternizas.com.br/admin em uma WebView. Ele NÃO contém um APK
+pré-compilado: esta execução não dispõe do Android SDK/Gradle e não é
+possível assinar e compilar com segurança aqui. O painel continua online.
+
+COMO GERAR UM APK INSTALÁVEL NO WINDOWS
+
+1. Instale o Android Studio (https://developer.android.com/studio).
+2. Extraia este ZIP no computador.
+3. No Android Studio, selecione File > New > Import Project e abra
+   a pasta Eterniza-CMS-Android-APK. Aguarde o sync terminar; permita
+   que o Android Studio baixe Android SDK 35 e Gradle 8.9, se solicitado.
+4. Para gerar um APK de teste: Build > Build Bundle(s) / APK(s) > Build APK(s).
+   Procure em app/build/outputs/apk/debug/app-debug.apk.
+5. Envie app-debug.apk ao Android, abra o arquivo e instale-o.
+6. Para entregar a outras pessoas ou atualizar o mesmo app no futuro,
+   gere um APK assinado em Build > Generate Signed Bundle / APK > APK.
+   Crie e GUARDE seu arquivo de assinatura (.jks), alias e senhas.
+   Escolha release. O resultado fica em app/build/outputs/apk/release/.
+   Para atualizar a instalação sem removê-la, use sempre a mesma chave.
+
+O projeto usa Java 17, Android Gradle Plugin 8.7.3, Gradle 8.9,
+Android SDK 35 e requer Android 10 ou mais recente.
+
+O aplicativo mantém os cookies do CMS dentro do próprio app, permite
+selecionar fotos do aparelho e baixar PDFs/arquivos da área administrativa.
+Links para outros domínios abrem no navegador externo. As permissões são
+as mesmas do site. Não contém senha, token Asaas nem credenciais embutidas.
+
+Este é um projeto Android SEPARADO do site: não copie os arquivos para o
+repositório Next.js nem substitua o módulo Eterniza Pets das clínicas.
+
+Se o Android Studio pedir um Gradle Wrapper ausente ao importar, crie um
+projeto Android simples (No Activity) usando Java, selecione Gradle Groovy,
+e copie a pasta app/src e os arquivos build.gradle, settings.gradle,
+app/build.gradle e gradle.properties deste ZIP para a raiz equivalente do
+novo projeto. O projeto criado pelo Android Studio fornece o wrapper.
